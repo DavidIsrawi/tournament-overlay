@@ -20,8 +20,8 @@ function makeState(revision: number): ServerState {
     startedAt: "2026-08-19T00:00:00.000Z",
     providers: [],
     operator: {
-      providerId: "demo",
-      eventInput: "demo/octagon-open",
+      providerId: "startgg",
+      eventInput: "genesis-9/event/melee-singles",
       selectedPhaseGroupId: null,
       selectedSetId: null,
       presentation: { sideOrder: "normal" },

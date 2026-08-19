@@ -45,6 +45,10 @@ export class ProviderRegistry {
     return provider;
   }
 
+  public has(id: ProviderId): boolean {
+    return this.#providers.has(id);
+  }
+
   public list(): readonly ProviderDescriptor[] {
     return [...this.#providers.values()].map(
       (provider) => provider.descriptor,
@@ -52,7 +56,6 @@ export class ProviderRegistry {
   }
 }
 
-export { DemoProvider } from "./demo.ts";
 export {
   normalizeStartGgEvent,
   parseStartGgEventInput,

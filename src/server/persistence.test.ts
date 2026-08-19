@@ -20,10 +20,10 @@ describe("AtomicOperatorStateStore", () => {
     directories.push(directory);
     const store = new AtomicOperatorStateStore(join(directory, "state.json"));
     const state = {
-      providerId: "demo",
-      eventInput: "demo/octagon-open",
-      selectedPhaseGroupId: "demo-top-8",
-      selectedSetId: "demo-set-5",
+      providerId: "startgg",
+      eventInput: "genesis-9/event/melee-singles",
+      selectedPhaseGroupId: "top-8",
+      selectedSetId: "set-5",
       presentation: { sideOrder: "swapped" as const },
     };
 

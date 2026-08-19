@@ -18,8 +18,6 @@ Open:
 - Octagon overlay: <http://127.0.0.1:5174/overlay/octagon/>
 - Local server: <http://127.0.0.1:3100>
 
-The default `demo` provider is deterministic and needs no credentials. It exercises event loading, bracket browsing, set selection, side swapping, polling, score motion, WebSocket reconnects, and persistence.
-
 ## StartGG setup
 
 1. Sign in at [start.gg](https://www.start.gg/).
@@ -37,7 +35,7 @@ tournament/genesis-9/event/melee-singles
 genesis-9/event/melee-singles
 ```
 
-An absent token, invalid input, provider error, or stale connection is reported explicitly in the dashboard; the operator can switch back to the demo provider at any time.
+An absent token, invalid input, provider error, or stale connection is reported explicitly in the dashboard.
 
 ## Production
 
@@ -72,7 +70,7 @@ src/
   server/        Fastify API, WebSocket hub, polling, state, static hosting
   dashboard/     React/Vite operator surface
   overlay/       React/Vite transparent OBS composition
-  providers/     Provider interface, registry, demo and StartGG adapters
+  providers/     Provider interface, registry, and StartGG adapter
   shared/        Domain contracts, message schemas, and browser socket client
 ```
 
@@ -125,7 +123,7 @@ This keeps StartGG request volume independent of dashboard or overlay client cou
 5. Add the provider ID to the shared contract and dashboard selector.
 6. Add adapter normalization fixtures and error-path tests.
 
-This is the same path used by the demo adapter and is intended for a future ParryGG implementation. Dashboard, overlay, persistence, polling, and WebSocket code should not need provider-specific branches.
+This provider-neutral path is intended for a future ParryGG implementation. Dashboard, overlay, persistence, polling, and WebSocket code should not need provider-specific branches.
 
 ## Development commands
 

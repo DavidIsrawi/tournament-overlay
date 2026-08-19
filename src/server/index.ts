@@ -2,11 +2,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { z } from "zod";
-import {
-  DemoProvider,
-  ProviderRegistry,
-  StartGgProvider,
-} from "../providers/index.ts";
+import { ProviderRegistry, StartGgProvider } from "../providers/index.ts";
 import { buildApp } from "./app.ts";
 import { AtomicOperatorStateStore } from "./persistence.ts";
 import { TournamentService } from "./service.ts";
@@ -28,7 +24,6 @@ const stateFile = resolve(repositoryRoot, environment.STATE_FILE);
 const publicDirectory = resolve(repositoryRoot, "dist/public");
 
 const providers = new ProviderRegistry([
-  new DemoProvider(),
   new StartGgProvider(environment.STARTGG_API_TOKEN),
 ]);
 const service = new TournamentService(

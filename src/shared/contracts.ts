@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const PROTOCOL_VERSION = 1 as const;
 
-export type ProviderId = "demo" | "startgg" | (string & {});
+export type ProviderId = "startgg" | (string & {});
 
 export interface EntrantProfile {
   readonly id: string;
@@ -98,7 +98,6 @@ export interface ProviderDescriptor {
   readonly id: ProviderId;
   readonly name: string;
   readonly configured: boolean;
-  readonly mode: "live" | "fixture";
 }
 
 export interface ConnectionState {
@@ -304,7 +303,6 @@ export const serverStateSchema = z.object({
       id: z.string(),
       name: z.string(),
       configured: z.boolean(),
-      mode: z.enum(["live", "fixture"]),
     }),
   ),
   operator: operatorStateSchema,

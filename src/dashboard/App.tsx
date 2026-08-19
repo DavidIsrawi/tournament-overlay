@@ -6,7 +6,6 @@ import {
   type ServerState,
 } from "../shared/contracts.ts";
 import {
-  useEffect,
   useMemo,
   useState,
   type FormEvent,
@@ -186,7 +185,7 @@ function BracketWorkspace({
         <div className="empty-state">
           <AnchorIcon />
           <h2>No bracket loaded</h2>
-          <p>Use the event controls above or open the included demo fixture.</p>
+          <p>Enter a StartGG event URL or slug in the controls above.</p>
         </div>
       ) : rounds.length === 0 ? (
         <div className="empty-state">
@@ -283,14 +282,6 @@ function SceneRail({
         >
           <span aria-hidden="true">⇄</span> Swap player sides
         </button>
-        <button
-          className="button button--quiet"
-          type="button"
-          disabled={state.operator.presentation.sideOrder === "normal"}
-          onClick={() => send({ type: "presentation.clear" })}
-        >
-          Clear presentation overrides
-        </button>
       </div>
 
       <section className="overlay-link">
@@ -328,14 +319,6 @@ function SceneRail({
             )?.name ?? state.operator.providerId}
           </dd>
         </div>
-        <div>
-          <dt>Updated</dt>
-          <dd>{formatTime(state.connection.lastUpdatedAt)}</dd>
-        </div>
-        <div>
-          <dt>Failures</dt>
-          <dd>{state.connection.failureCount}</dd>
-        </div>
       </dl>
     </aside>
   );
@@ -344,15 +327,8 @@ function SceneRail({
 export function App(): ReactNode {
   const { state, socketStatus, error, sendCommand } =
     useTournamentSocket("dashboard");
-  const [providerId, setProviderId] = useState("demo");
-  const [eventInput, setEventInput] = useState("demo/octagon-open");
-
-  useEffect(() => {
-    if (state !== null) {
-      setProviderId(state.operator.providerId);
-      setEventInput(state.operator.eventInput);
-    }
-  }, [state?.operator.eventInput, state?.operator.providerId]);
+  const [providerId, setProviderId] = useState("startgg");
+  const [eventInput, setEventInput] = useState("");
 
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -406,11 +382,7 @@ export function App(): ReactNode {
             <input
               required
               value={eventInput}
-              placeholder={
-                providerId === "demo"
-                  ? "demo/octagon-open"
-                  : "https://www.start.gg/tournament/…/event/…"
-              }
+              placeholder="https://www.start.gg/tournament/…/event/…"
               onChange={(event) => setEventInput(event.target.value)}
             />
           </label>

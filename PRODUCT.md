@@ -25,7 +25,6 @@ The server, dashboard, and OBS browser source run on one operator machine. Opera
 ## Capabilities and Constraints
 
 - StartGG integration uses only the official GraphQL API and is read-only.
-- A deterministic demo provider exercises the same provider interface without credentials.
 - Browser clients never contact tournament providers directly.
 - Public GraphQL cannot supply live stage-strike or DSR task state.
 - Provider source data remains immutable; local side swapping is presentation state.
@@ -45,7 +44,7 @@ The Octagon overlay preserves the supplied nautical identity: deep navy framing,
 - Make source freshness and recovery unmistakable.
 - Keep the operator's next action visible and keyboard accessible.
 - Preserve immutable provider truth beneath reversible presentation choices.
-- Demonstrate every workflow without a token through the same provider boundary.
+- Keep provider integrations behind a shared boundary that can support ParryGG later.
 - Prefer a small, inspectable local system over framework weight.
 
 ## Accessibility & Inclusion

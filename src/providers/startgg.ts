@@ -425,7 +425,6 @@ export class StartGgProvider implements TournamentDataProvider {
       id: "startgg",
       name: "StartGG",
       configured,
-      mode: "live",
     };
     this.#client = configured
       ? new GraphQLClient(STARTGG_ENDPOINT, {

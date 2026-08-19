@@ -18,10 +18,10 @@ import type { AtomicOperatorStateStore } from "./persistence.ts";
 import { StateHub, type StateListener } from "./state-hub.ts";
 
 const DEFAULT_OPERATOR_STATE: OperatorState = {
-  providerId: "demo",
-  eventInput: "demo/octagon-open",
-  selectedPhaseGroupId: "demo-top-8",
-  selectedSetId: "demo-set-5",
+  providerId: "startgg",
+  eventInput: "",
+  selectedPhaseGroupId: null,
+  selectedSetId: null,
   presentation: { sideOrder: "normal" },
 };
 
@@ -69,9 +69,17 @@ export class TournamentService {
   }
 
   public async initialize(): Promise<void> {
-    const operator = await this.store.load(DEFAULT_OPERATOR_STATE);
+    const persistedOperator = await this.store.load(DEFAULT_OPERATOR_STATE);
+    const operator = this.providers.has(persistedOperator.providerId)
+      ? persistedOperator
+      : DEFAULT_OPERATOR_STATE;
     this.#commit({ operator });
-    await this.loadEvent(operator.providerId, operator.eventInput, true);
+    if (operator !== persistedOperator) {
+      await this.store.save(operator);
+    }
+    if (operator.eventInput.trim().length > 0) {
+      await this.loadEvent(operator.providerId, operator.eventInput, true);
+    }
   }
 
   public async dispatch(command: ClientCommand): Promise<void> {

@@ -43,8 +43,8 @@ const set: NormalizedSet = {
 
 const event: NormalizedEvent = {
   id: "event-1",
-  providerId: "demo",
-  slug: "demo/octagon-open",
+  providerId: "startgg",
+  slug: "genesis-9/event/melee-singles",
   name: "Ultimate Singles",
   tournamentName: "Octagon Open",
   phaseGroups: [
