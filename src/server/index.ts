@@ -6,13 +6,13 @@ import {
   DemoProvider,
   ProviderRegistry,
   StartGgProvider,
-} from "@tournament-overlay/providers";
+} from "../providers/index.ts";
 import { buildApp } from "./app.ts";
 import { AtomicOperatorStateStore } from "./persistence.ts";
 import { TournamentService } from "./service.ts";
 
 const repositoryRoot = resolve(
-  fileURLToPath(new URL("../../../", import.meta.url)),
+  fileURLToPath(new URL("../../", import.meta.url)),
 );
 config({ path: resolve(repositoryRoot, ".env") });
 
@@ -25,7 +25,7 @@ const environmentSchema = z.object({
 
 const environment = environmentSchema.parse(process.env);
 const stateFile = resolve(repositoryRoot, environment.STATE_FILE);
-const publicDirectory = resolve(repositoryRoot, "apps/server/dist/public");
+const publicDirectory = resolve(repositoryRoot, "dist/public");
 
 const providers = new ProviderRegistry([
   new DemoProvider(),

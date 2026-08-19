@@ -3,7 +3,7 @@ import {
   PROTOCOL_VERSION,
   deriveOverlayView,
   type ServerState,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 import { StateHub } from "./state-hub.ts";
 
 function makeState(revision: number): ServerState {

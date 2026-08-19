@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import {
   operatorStateSchema,
   type OperatorState,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 
 export class AtomicOperatorStateStore {
   public constructor(private readonly filePath: string) {}

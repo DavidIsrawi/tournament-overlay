@@ -21,9 +21,8 @@
     "types": ["node", "vite/client"]
   },
   "include": [
-    "apps/**/*.ts",
-    "apps/**/*.tsx",
-    "packages/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     "eslint.config.js",
     "vitest.config.ts"
   ]

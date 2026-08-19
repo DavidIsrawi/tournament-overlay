@@ -3,7 +3,7 @@ import type {
   NormalizedEvent,
   NormalizedSet,
   ProviderDescriptor,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 import { GraphQLClient, gql } from "graphql-request";
 import { z } from "zod";
 import { ProviderError, type TournamentDataProvider } from "./index.ts";

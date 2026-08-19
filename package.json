@@ -3,20 +3,32 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "engines": {
     "node": ">=24 <25"
   },
   "scripts": {
-    "build": "npm run build -w @tournament-overlay/dashboard && npm run build -w @tournament-overlay/overlay-octagon && npm run typecheck",
-    "dev": "concurrently --kill-others-on-fail --names server,dashboard,overlay \"npm run dev -w @tournament-overlay/server\" \"npm run dev -w @tournament-overlay/dashboard\" \"npm run dev -w @tournament-overlay/overlay-octagon\"",
+    "build": "node --eval \"import('node:fs').then(({ rmSync }) => rmSync('dist', { recursive: true, force: true }))\" && npm run build:dashboard && npm run build:overlay && npm run typecheck",
+    "build:dashboard": "vite build --config src/dashboard/vite.config.ts",
+    "build:overlay": "vite build --config src/overlay/vite.config.ts",
+    "dev": "concurrently --kill-others-on-fail --names server,dashboard,overlay \"npm run dev:server\" \"npm run dev:dashboard\" \"npm run dev:overlay\"",
+    "dev:dashboard": "vite --config src/dashboard/vite.config.ts --port 5173",
+    "dev:overlay": "vite --config src/overlay/vite.config.ts --port 5174",
+    "dev:server": "tsx watch src/server/index.ts",
     "lint": "eslint .",
-    "start": "npm run start -w @tournament-overlay/server",
+    "start": "tsx src/server/index.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/static": "10.1.3",
+    "@fastify/websocket": "11.3.0",
+    "dotenv": "17.4.2",
+    "fastify": "5.11.3",
+    "graphql-request": "7.4.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "ws": "8.21.3",
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -24,12 +36,14 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "@types/ws": "8.18.1",
+    "@vitejs/plugin-react": "6.0.5",
     "concurrently": "10.0.4",
     "eslint": "10.8.1",
     "globals": "17.11.0",
     "tsx": "4.23.12",
     "typescript": "6.0.3",
     "typescript-eslint": "8.67.0",
+    "vite": "8.2.1",
     "vitest": "4.1.10"
   }
 }

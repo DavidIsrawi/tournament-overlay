@@ -3,7 +3,7 @@ import type {
   NormalizedSet,
   ProviderDescriptor,
   ProviderId,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 
 export interface TournamentDataProvider {
   readonly descriptor: ProviderDescriptor;

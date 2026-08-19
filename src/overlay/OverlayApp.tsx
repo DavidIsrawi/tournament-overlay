@@ -1,8 +1,8 @@
-import { useTournamentSocket } from "@tournament-overlay/browser-client";
+import { useTournamentSocket } from "../shared/browser-client.ts";
 import type {
   OverlayPlayer,
   OverlayView,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 import {
   useEffect,
   useRef,

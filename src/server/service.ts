@@ -9,11 +9,11 @@ import {
   type OperatorState,
   type ProviderId,
   type ServerState,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 import {
   ProviderError,
   type ProviderRegistry,
-} from "@tournament-overlay/providers";
+} from "../providers/index.ts";
 import type { AtomicOperatorStateStore } from "./persistence.ts";
 import { StateHub, type StateListener } from "./state-hub.ts";
 

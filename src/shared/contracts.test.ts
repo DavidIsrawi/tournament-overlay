@@ -3,7 +3,7 @@ import {
   deriveOverlayView,
   type NormalizedEvent,
   type NormalizedSet,
-} from "./index.ts";
+} from "./contracts.ts";
 
 const set: NormalizedSet = {
   id: "set-1",

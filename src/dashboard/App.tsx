@@ -1,10 +1,10 @@
-import { useTournamentSocket } from "@tournament-overlay/browser-client";
+import { useTournamentSocket } from "../shared/browser-client.ts";
 import {
   findSet,
   type ClientCommand,
   type NormalizedSet,
   type ServerState,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 import {
   useEffect,
   useMemo,

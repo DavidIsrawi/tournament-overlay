@@ -1,6 +1,5 @@
 node_modules/
 dist/
-apps/server/dist/
 .data/
 .env
 coverage/
