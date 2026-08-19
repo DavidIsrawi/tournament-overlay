@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-19T00:00:00Z",
+  "title": "Design System: Tournament Overlay",
+  "extensions": {
+    "colorMeta": {
+      "deep-navy": {
+        "role": "primary",
+        "displayName": "Deep Navy",
+        "tonalRamp": ["#090c14", "#111623", "#202942", "#3d4967", "#65708a", "#949bad", "#c8cbd3", "#f2f3f5"]
+      },
+      "octagon-purple": {
+        "role": "primary",
+        "displayName": "Octagon Purple",
+        "tonalRamp": ["#1d1028", "#321d46", "#4b3068", "#68458f", "#8867aa", "#ab90c5", "#d1c0df", "#f4eef8"]
+      },
+      "harbor-teal": {
+        "role": "secondary",
+        "displayName": "Harbor Teal",
+        "tonalRamp": ["#061b1c", "#0b3033", "#104a4e", "#185f64", "#378084", "#67a4a7", "#a3cecf", "#e5f3f3"]
+      },
+      "sand": {
+        "role": "tertiary",
+        "displayName": "Chart Sand",
+        "tonalRamp": ["#33230c", "#5b411b", "#86652f", "#b78f4f", "#d9b879", "#f1d3a0", "#f8e8ca", "#fdf8ed"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "tonalRamp": ["#24231f", "#48463f", "#6c6960", "#908c81", "#b5b1a7", "#d2cec5", "#e8e5dd", "#faf9f6"]
+      }
+    },
+    "typographyMeta": {
+      "display": {"displayName": "Broadcast Display", "purpose": "Player names, boot title, and major event headings."},
+      "title": {"displayName": "Operator Title", "purpose": "Scene and workspace headings."},
+      "body": {"displayName": "Operator Body", "purpose": "Controls, bracket details, and explanatory copy."},
+      "label": {"displayName": "Telemetry Label", "purpose": "Phase, round, connection, and set status."}
+    },
+    "shadows": [
+      {"name": "command-lift", "value": "0 8px 20px rgba(32, 41, 66, 0.22)", "purpose": "Separates the sticky command bar from operator content."},
+      {"name": "control-press", "value": "0 3px 0 rgba(32, 41, 66, 0.35)", "purpose": "Makes buttons feel physically pressable."},
+      {"name": "broadcast-plate", "value": "0 4px 0 rgba(32, 41, 66, 0.45), 0 10px 10px rgba(0, 0, 0, 0.26)", "purpose": "Keeps the overlay readable over gameplay."}
+    ],
+    "motion": [
+      {"name": "set-arrive", "value": "620ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Introduces a newly selected set."},
+      {"name": "score-bell", "value": "520ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Confirms a score change."},
+      {"name": "helm-turn", "value": "620ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Connects a set transition to the Octagon helm."}
+    ],
+    "breakpoints": [
+      {"name": "scene-stack", "value": "1080px"},
+      {"name": "operator-compact", "value": "720px"}
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The standard operator action.",
+      "html": "<button class=\"ds-btn-primary\">SWAP SIDES</button>",
+      "css": ".ds-btn-primary { min-height: 42px; padding: 0 15px; color: #fff; background: #68458f; border: 2px solid #202942; border-radius: 7px 15px; box-shadow: 0 3px 0 rgba(32, 41, 66, .35); font: 800 15px/1.4 Avenir Next, Avenir, Trebuchet MS, sans-serif; } .ds-btn-primary:hover { filter: brightness(1.08); } .ds-btn-primary:active { box-shadow: none; transform: translateY(2px); } .ds-btn-primary:focus-visible { outline: 3px solid #f6b84c; outline-offset: 2px; }"
+    },
+    {
+      "name": "Load Button",
+      "kind": "button",
+      "refersTo": "button-load",
+      "description": "The event-loading call to action.",
+      "html": "<button class=\"ds-btn-load\">LOAD EVENT</button>",
+      "css": ".ds-btn-load { min-height: 42px; padding: 0 15px; color: #202942; background: #f1d3a0; border: 2px solid #d99b33; border-radius: 7px 15px; box-shadow: 0 3px 0 rgba(32, 41, 66, .35); font: 800 15px/1.4 Avenir Next, Avenir, Trebuchet MS, sans-serif; } .ds-btn-load:hover { filter: brightness(1.05); } .ds-btn-load:active { box-shadow: none; transform: translateY(2px); } .ds-btn-load:focus-visible { outline: 3px solid #f6b84c; outline-offset: 2px; }"
+    },
+    {
+      "name": "Operator Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A labeled, warm-paper event or search field.",
+      "html": "<label class=\"ds-field\"><span>EVENT URL OR SLUG</span><input placeholder=\"tournament/.../event/...\"></label>",
+      "css": ".ds-field { display: grid; gap: 5px; color: #5b6171; font: 900 11px/1 Avenir Next, Avenir, Trebuchet MS, sans-serif; letter-spacing: .08em; text-transform: uppercase; } .ds-field input { min-height: 42px; padding: 0 12px; color: #202942; background: #fffdf7; border: 2px solid #8d94a8; border-radius: 7px 15px; font: 500 15px/1.4 Avenir Next, Avenir, Trebuchet MS, sans-serif; } .ds-field input:focus-visible { outline: 3px solid #f6b84c; outline-offset: 2px; }"
+    },
+    {
+      "name": "Phase Tab",
+      "kind": "nav",
+      "description": "A compact bracket phase selector.",
+      "html": "<button class=\"ds-phase\" aria-current=\"page\">TOP 8 <small>8</small></button>",
+      "css": ".ds-phase { min-height: 38px; padding: 0 13px; color: #68458f; background: transparent; border: 0; border-bottom: 3px solid #68458f; font: 800 15px/1.4 Avenir Next, Avenir, Trebuchet MS, sans-serif; } .ds-phase small { margin-left: 7px; padding: 2px 6px; color: #202942; background: #ded9cc; border-radius: 999px; } .ds-phase:hover { background: rgba(104, 69, 143, .06); } .ds-phase:focus-visible { outline: 3px solid #f6b84c; outline-offset: 2px; }"
+    },
+    {
+      "name": "Live Status",
+      "kind": "chip",
+      "description": "A textual freshness or connection indicator.",
+      "html": "<span class=\"ds-status\"><i></i>LIVE</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 7px; color: #74d8ad; border: 1px solid currentColor; border-radius: 999px; font: 900 10px/1 Avenir Next, Avenir, Trebuchet MS, sans-serif; letter-spacing: .08em; text-transform: uppercase; } .ds-status i { width: 8px; height: 8px; background: currentColor; border-radius: 50%; }"
+    },
+    {
+      "name": "Set Card",
+      "kind": "card",
+      "description": "A compact bracket set on warm tournament paper.",
+      "html": "<article class=\"ds-set\"><span>WINNERS FINAL · IN PROGRESS</span><div>COBALT <strong>2</strong></div><div>NETURTLE <strong>1</strong></div></article>",
+      "css": ".ds-set { position: relative; display: grid; gap: 7px; padding: 9px 11px 11px; color: #202942; background: #f8f5ec; border: 2px solid #a5a096; border-radius: 7px 17px; box-shadow: 0 4px 8px rgba(32, 41, 66, .1); font-family: Avenir Next, Avenir, Trebuchet MS, sans-serif; } .ds-set::before { position: absolute; inset: 0 auto 0 0; width: 4px; background: #d99b33; content: ''; } .ds-set span { color: #5b6171; font-size: 10px; font-weight: 900; letter-spacing: .07em; } .ds-set div { display: flex; justify-content: space-between; font-size: 13px; font-weight: 750; } .ds-set strong { display: grid; width: 25px; height: 25px; place-items: center; color: #fff; background: #202942; border-radius: 5px 10px; } .ds-set:hover { border-color: #68458f; } .ds-set:focus-within { outline: 3px solid #f6b84c; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Tournament Chart Room",
+    "overview": "Tournament Overlay combines a practical event operations desk with the tactile, slightly whimsical nautical identity of the Octagon broadcast package. The dashboard is paper-forward and dense enough to scan bracket flow quickly; its command bar and scene rail use deep navy to signal durable controls and current broadcast state. Decoration must carry identity or structure.",
+    "keyCharacteristics": ["Warm paper and canvas work surfaces framed by deep navy command areas", "Purple and teal as stable port/starboard identities", "Brass and sand for emphasis, loading, and tournament ornament", "Asymmetric rounded corners that suggest fitted plates rather than generic cards", "Strong player names with compact uppercase labels and telemetry", "Motion only when a set or score changes"],
+    "rules": [
+      {"name": "The Side Identity Rule", "body": "Purple is port/player one; teal is starboard/player two. Do not swap those meanings to decorate unrelated state.", "section": "colors"},
+      {"name": "The Player Name Rule", "body": "Player names receive the strongest type weight; seed, pronoun, location, and social metadata must truncate before the name becomes unreadable.", "section": "typography"},
+      {"name": "The Structural Shadow Rule", "body": "Shadows explain stacking, pressability, or broadcast separation; they are not ambient decoration for every panel.", "section": "elevation"}
+    ],
+    "dos": ["Do preserve horizontally readable bracket chronology on narrow screens.", "Do keep connection and freshness state visible, textual, and timestamped.", "Do truncate long metadata before player names or scores collide.", "Do honor prefers-reduced-motion for score, helm, and set transitions.", "Do reserve the richer nautical material treatment for set cards, the scene rail, and the overlay."],
+    "donts": ["Don't turn every dashboard region into an equal floating card.", "Don't add generic blue gradients; the existing texture vocabulary is paper, paint, brass, and fitted plates.", "Don't repurpose purple and teal so side identity becomes ambiguous.", "Don't use continuous ambient motion when tournament state is unchanged.", "Don't rely on color alone for connection, error, or freshness state."]
+  }
+}

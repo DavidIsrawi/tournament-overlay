@@ -1,0 +1,35 @@
+{
+  "name": "tournament-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "npm run build -w @tournament-overlay/dashboard && npm run build -w @tournament-overlay/overlay-octagon && npm run typecheck",
+    "dev": "concurrently --kill-others-on-fail --names server,dashboard,overlay \"npm run dev -w @tournament-overlay/server\" \"npm run dev -w @tournament-overlay/dashboard\" \"npm run dev -w @tournament-overlay/overlay-octagon\"",
+    "lint": "eslint .",
+    "start": "npm run start -w @tournament-overlay/server",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@types/ws": "8.18.1",
+    "concurrently": "10.0.4",
+    "eslint": "10.8.1",
+    "globals": "17.11.0",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.10"
+  }
+}

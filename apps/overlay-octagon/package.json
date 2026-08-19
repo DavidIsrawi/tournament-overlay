@@ -1,0 +1,20 @@
+{
+  "name": "@tournament-overlay/overlay-octagon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --port 5174"
+  },
+  "dependencies": {
+    "@tournament-overlay/browser-client": "0.1.0",
+    "@tournament-overlay/contracts": "0.1.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.0.5",
+    "vite": "8.2.1"
+  }
+}

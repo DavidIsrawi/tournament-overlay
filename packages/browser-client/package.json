@@ -1,0 +1,13 @@
+{
+  "name": "@tournament-overlay/browser-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tournament-overlay/contracts": "0.1.0",
+    "react": "19.2.8"
+  }
+}
