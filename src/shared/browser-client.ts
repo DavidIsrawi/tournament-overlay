@@ -4,7 +4,7 @@ import {
   type ClientCommand,
   type ClientMessage,
   type ServerState,
-} from "@tournament-overlay/contracts";
+} from "./contracts.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type SocketStatus =

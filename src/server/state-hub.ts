@@ -1,4 +1,4 @@
-import type { ServerState } from "@tournament-overlay/contracts";
+import type { ServerState } from "../shared/contracts.ts";
 
 export type StateListener = (state: ServerState) => void;
 

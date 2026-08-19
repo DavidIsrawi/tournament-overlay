@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
-import type { ServerMessage } from "@tournament-overlay/contracts";
+import type { ServerMessage } from "../shared/contracts.ts";
 import {
   PROTOCOL_VERSION,
   clientMessageSchema,
-} from "@tournament-overlay/contracts";
+} from "../shared/contracts.ts";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";

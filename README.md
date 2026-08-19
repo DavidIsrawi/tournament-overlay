@@ -68,14 +68,12 @@ The page background is transparent. The overlay reconnects automatically and rec
 ## Architecture
 
 ```text
-apps/
-  server/            Fastify API, WebSocket hub, polling, state, static hosting
-  dashboard/         React/Vite operator surface
-  overlay-octagon/   React/Vite transparent OBS composition
-packages/
-  contracts/         Normalized domain, OverlayView, REST/WS message schemas
-  providers/         Provider interface, registry, demo and StartGG adapters
-  browser-client/    Reconnecting typed WebSocket client
+src/
+  server/        Fastify API, WebSocket hub, polling, state, static hosting
+  dashboard/     React/Vite operator surface
+  overlay/       React/Vite transparent OBS composition
+  providers/     Provider interface, registry, demo and StartGG adapters
+  shared/        Domain contracts, message schemas, and browser socket client
 ```
 
 The server is the single authority. A provider returns normalized immutable source data. Local `PresentationState` separately records selected sides and safe overrides. `deriveOverlayView` combines them into the stable provider-neutral contract broadcast to both clients. Swapping sides therefore cannot mutate entrant or set data.
@@ -120,7 +118,7 @@ This keeps StartGG request volume independent of dashboard or overlay client cou
 
 ## Add a provider
 
-1. Implement `TournamentDataProvider` in `packages/providers`.
+1. Implement `TournamentDataProvider` in `src/providers`.
 2. Parse and validate the provider's response inside that adapter.
 3. Normalize it to `NormalizedEvent` and `NormalizedSet`; do not export provider-specific API types.
 4. Register the adapter in `createProviderRegistry`.
