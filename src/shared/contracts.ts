@@ -1,6 +1,11 @@
 import { z } from "zod";
+import {
+  DEFAULT_OVERLAY_TEMPLATE_ID,
+  OVERLAY_TEMPLATE_IDS,
+  type OverlayTemplateId,
+} from "./overlay-templates.ts";
 
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 3 as const;
 
 export type ProviderId = "startgg" | (string & {});
 
@@ -46,6 +51,7 @@ export interface NormalizedPhaseGroup {
   readonly id: string;
   readonly name: string;
   readonly phaseName: string;
+  readonly setsLoaded: boolean;
   readonly sets: readonly NormalizedSet[];
 }
 
@@ -61,6 +67,7 @@ export interface NormalizedEvent {
 
 export interface PresentationState {
   readonly sideOrder: "normal" | "swapped";
+  readonly overlayTemplateId: OverlayTemplateId;
 }
 
 export interface OperatorState {
@@ -121,6 +128,9 @@ export interface ServerState {
 
 export const presentationStateSchema = z.object({
   sideOrder: z.enum(["normal", "swapped"]),
+  overlayTemplateId: z
+    .enum(OVERLAY_TEMPLATE_IDS)
+    .default(DEFAULT_OVERLAY_TEMPLATE_ID),
 });
 
 export const operatorStateSchema = z.object({
@@ -155,6 +165,11 @@ const presentationClearCommandSchema = z.object({
   type: z.literal("presentation.clear"),
 });
 
+const overlaySelectCommandSchema = z.object({
+  type: z.literal("overlay.select"),
+  templateId: z.enum(OVERLAY_TEMPLATE_IDS),
+});
+
 const refreshCommandSchema = z.object({
   type: z.literal("refresh"),
 });
@@ -165,6 +180,7 @@ export const clientCommandSchema = z.discriminatedUnion("type", [
   setSelectCommandSchema,
   presentationSwapCommandSchema,
   presentationClearCommandSchema,
+  overlaySelectCommandSchema,
   refreshCommandSchema,
 ]);
 
@@ -254,6 +270,7 @@ const normalizedEventSchema = z.object({
       id: z.string(),
       name: z.string(),
       phaseName: z.string(),
+      setsLoaded: z.boolean(),
       sets: z.array(normalizedSetSchema),
     }),
   ),

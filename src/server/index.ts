@@ -31,9 +31,10 @@ const service = new TournamentService(
   new AtomicOperatorStateStore(stateFile),
   environment.POLL_INTERVAL_MS,
 );
-await service.initialize();
-
 const app = await buildApp(service, publicDirectory);
+void service.initialize().catch((error: unknown) => {
+  app.log.error(error, "Failed to initialize persisted operator state");
+});
 await app.listen({ host: "127.0.0.1", port: environment.PORT });
 
 const shutdown = async (): Promise<void> => {

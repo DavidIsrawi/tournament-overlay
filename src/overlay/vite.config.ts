@@ -6,11 +6,11 @@ import { defineConfig } from "vite";
 const directory = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
-  base: "/overlay/octagon/",
+  base: "/overlay/",
   root: directory,
   plugins: [react()],
   build: {
-    outDir: resolve(directory, "../../dist/public/overlay/octagon"),
+    outDir: resolve(directory, "../../dist/public/overlay"),
     emptyOutDir: false,
     assetsDir: "assets",
   },

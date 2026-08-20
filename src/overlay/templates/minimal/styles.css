@@ -1,0 +1,229 @@
+.minimal-template {
+  position: absolute;
+  inset: 0;
+  animation: minimal-arrive 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.minimal-event {
+  position: absolute;
+  top: 32px;
+  left: 50%;
+  display: flex;
+  width: 520px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 20px;
+  color: var(--white);
+  background: var(--deep);
+  border-radius: var(--radius-control);
+  transform: translateX(-50%);
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+.minimal-event::before,
+.minimal-event::after {
+  width: 44px;
+  height: 2px;
+  content: "";
+  background: var(--brass);
+}
+
+.minimal-event span {
+  overflow: hidden;
+  color: var(--sand);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.minimal-event strong {
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.minimal-scoreboard {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  display: grid;
+  width: 1320px;
+  height: 92px;
+  grid-template-columns: minmax(0, 1fr) 250px minmax(0, 1fr);
+  color: var(--white);
+  background: var(--deep);
+  border-top: 3px solid var(--brass);
+  border-bottom: 3px solid var(--brass);
+  box-shadow:
+    0 5px 0 rgba(0, 0, 0, 0.34),
+    0 14px 22px rgba(0, 0, 0, 0.2);
+  transform: translateX(-50%);
+}
+
+.minimal-scoreboard::before,
+.minimal-scoreboard::after {
+  position: absolute;
+  top: -3px;
+  width: 18px;
+  height: 92px;
+  content: "";
+  background: var(--deep);
+  border-top: 3px solid var(--brass);
+  border-bottom: 3px solid var(--brass);
+  transform: skewX(-10deg);
+}
+
+.minimal-scoreboard::before {
+  left: -10px;
+}
+
+.minimal-scoreboard::after {
+  right: -10px;
+}
+
+.minimal-player {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.minimal-player--starboard {
+  flex-direction: row-reverse;
+}
+
+.minimal-player__identity {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 24px;
+}
+
+.minimal-player--starboard .minimal-player__identity {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.minimal-player__identity span {
+  overflow: hidden;
+  color: var(--sand);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.minimal-player__identity strong {
+  overflow: hidden;
+  font-size: clamp(25px, 2vw, 42px);
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.minimal-player__score {
+  display: grid;
+  width: 92px;
+  place-items: center;
+  background: var(--purple);
+  font-size: 42px;
+  font-weight: 900;
+}
+
+.minimal-player--starboard .minimal-player__score {
+  background: var(--teal);
+}
+
+.minimal-match {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 0 16px;
+  color: var(--deep);
+  background: var(--sand);
+  border-right: 1px solid var(--brass);
+  border-left: 1px solid var(--brass);
+  text-align: center;
+}
+
+.minimal-match strong,
+.minimal-match span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.minimal-match strong {
+  font-size: 23px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.minimal-match span {
+  color: #5b6171;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.minimal-freshness {
+  position: absolute;
+  top: 180px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  color: var(--deep);
+  background: var(--sand);
+  border: 3px solid var(--deep);
+  border-radius: var(--radius-control);
+  box-shadow:
+    0 4px 0 rgba(32, 41, 66, 0.32),
+    0 9px 12px rgba(0, 0, 0, 0.16);
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.minimal-freshness span {
+  width: 9px;
+  height: 9px;
+  background: #a23b42;
+  border-radius: 50%;
+}
+
+@keyframes minimal-arrive {
+  from {
+    opacity: 0.35;
+    clip-path: inset(0 45% 0 45%);
+    filter: blur(5px);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+    filter: blur(0);
+  }
+}

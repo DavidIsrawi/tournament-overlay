@@ -24,14 +24,20 @@ describe("AtomicOperatorStateStore", () => {
       eventInput: "genesis-9/event/melee-singles",
       selectedPhaseGroupId: "top-8",
       selectedSetId: "set-5",
-      presentation: { sideOrder: "swapped" as const },
+      presentation: {
+        sideOrder: "swapped" as const,
+        overlayTemplateId: "minimal" as const,
+      },
     };
 
     await store.save(state);
     const restored = await store.load({
       ...state,
       selectedSetId: null,
-      presentation: { sideOrder: "normal" },
+      presentation: {
+        sideOrder: "normal",
+        overlayTemplateId: "octagon",
+      },
     });
 
     expect(restored).toEqual(state);

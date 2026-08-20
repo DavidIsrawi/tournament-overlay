@@ -1,8 +1,7 @@
-import { useTournamentSocket } from "../shared/browser-client.ts";
 import type {
   OverlayPlayer,
   OverlayView,
-} from "../shared/contracts.ts";
+} from "../../../shared/contracts.ts";
 import {
   useEffect,
   useRef,
@@ -10,21 +9,8 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-
-function useStageScale(): number {
-  const [scale, setScale] = useState(1);
-
-  useEffect(() => {
-    const update = (): void => {
-      setScale(Math.min(window.innerWidth / 1920, window.innerHeight / 1080));
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, []);
-
-  return scale;
-}
+import type { OverlayTemplateProps } from "../../types.ts";
+import "./styles.css";
 
 function Score({
   value,
@@ -216,27 +202,13 @@ function Scoreboard({
   );
 }
 
-export function OverlayApp(): ReactNode {
-  const { state, socketStatus } = useTournamentSocket("overlay");
-  const scale = useStageScale();
-  const style = {
-    transform: `scale(${String(scale)})`,
-  };
-
-  if (state === null) {
-    return (
-      <div className="stage" style={style}>
-        <div className="overlay-empty">Connecting to tournament server…</div>
-      </div>
-    );
-  }
-
+export default function OctagonOverlay({
+  view,
+  connected,
+}: OverlayTemplateProps): ReactNode {
   return (
-    <div className="stage" style={style}>
-      <Scoreboard
-        view={state.overlay}
-        connected={socketStatus === "connected"}
-      />
+    <div className="octagon-template">
+      <Scoreboard view={view} connected={connected} />
     </div>
   );
 }

@@ -5,10 +5,36 @@ import type {
   ProviderId,
 } from "../shared/contracts.ts";
 
+export interface ProviderRequestOptions {
+  readonly signal?: AbortSignal;
+}
+
+export interface PhaseGroupLoadProgress {
+  readonly loadedPages: number;
+  readonly totalPages: number;
+  readonly sets: readonly NormalizedSet[];
+}
+
+export interface PhaseGroupLoadOptions extends ProviderRequestOptions {
+  readonly onProgress?: (progress: PhaseGroupLoadProgress) => void;
+}
+
 export interface TournamentDataProvider {
   readonly descriptor: ProviderDescriptor;
-  loadEvent(input: string): Promise<NormalizedEvent>;
-  loadSet(setId: string, event: NormalizedEvent): Promise<NormalizedSet>;
+  loadEvent(
+    input: string,
+    options?: ProviderRequestOptions,
+  ): Promise<NormalizedEvent>;
+  loadPhaseGroupSets(
+    phaseGroupId: string,
+    phaseName: string,
+    options?: PhaseGroupLoadOptions,
+  ): Promise<readonly NormalizedSet[]>;
+  loadSet(
+    setId: string,
+    event: NormalizedEvent,
+    options?: ProviderRequestOptions,
+  ): Promise<NormalizedSet>;
 }
 
 export class ProviderError extends Error {

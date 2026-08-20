@@ -24,7 +24,10 @@ function makeState(revision: number): ServerState {
       eventInput: "genesis-9/event/melee-singles",
       selectedPhaseGroupId: null,
       selectedSetId: null,
-      presentation: { sideOrder: "normal" },
+      presentation: {
+        sideOrder: "normal",
+        overlayTemplateId: "octagon",
+      },
     },
     connection,
     event: null,
@@ -32,7 +35,7 @@ function makeState(revision: number): ServerState {
       revision,
       null,
       null,
-      { sideOrder: "normal" },
+      { sideOrder: "normal", overlayTemplateId: "octagon" },
       "idle",
     ),
   };

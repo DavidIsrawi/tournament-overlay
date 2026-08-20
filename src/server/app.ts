@@ -122,6 +122,10 @@ export async function buildApp(
     socket.on("close", unsubscribe);
   });
 
+  app.get("/overlay/octagon/", (_request, reply) =>
+    reply.code(308).redirect("/overlay/?template=octagon"),
+  );
+
   if (existsSync(publicDirectory)) {
     await app.register(fastifyStatic, {
       root: publicDirectory,

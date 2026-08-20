@@ -4,9 +4,14 @@ import type {
   NormalizedSet,
   ProviderDescriptor,
 } from "../shared/contracts.ts";
-import { GraphQLClient, gql } from "graphql-request";
+import { ClientError, GraphQLClient, gql } from "graphql-request";
 import { z } from "zod";
-import { ProviderError, type TournamentDataProvider } from "./index.ts";
+import {
+  ProviderError,
+  type PhaseGroupLoadOptions,
+  type ProviderRequestOptions,
+  type TournamentDataProvider,
+} from "./index.ts";
 
 const STARTGG_ENDPOINT = "https://api.start.gg/gql/alpha";
 
@@ -162,17 +167,6 @@ const PHASE_GROUP_SETS_QUERY = gql`
               id
               name
               initialSeedNum
-              participants {
-                gamerTag
-                prefix
-                user {
-                  genderPronoun
-                  location {
-                    country
-                    state
-                  }
-                }
-              }
             }
             standing {
               stats {
@@ -244,6 +238,63 @@ const phaseGroupSetsResponseSchema = z.object({
 });
 
 const SETS_PER_PAGE = 20;
+const DEFAULT_REQUEST_INTERVAL_MS = 1_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 45_000;
+const DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS = [60_000, 120_000] as const;
+
+export interface StartGgProviderOptions {
+  readonly fetch?: typeof fetch;
+  readonly requestIntervalMs?: number;
+  readonly requestTimeoutMs?: number;
+  readonly rateLimitRetryDelaysMs?: readonly number[];
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The StartGG request was cancelled.", "AbortError");
+}
+
+async function waitForDelay(
+  delayMs: number,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  signal?.throwIfAborted();
+  if (delayMs <= 0) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(
+        signal === undefined
+          ? new Error("Request cancelled.")
+          : abortReason(signal),
+      );
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function retryAfterMs(error: ClientError, fallbackMs: number): number {
+  const value = error.response.headers.get("retry-after");
+  if (value === null) {
+    return fallbackMs;
+  }
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1_000);
+  }
+
+  const date = Date.parse(value);
+  return Number.isNaN(date) ? fallbackMs : Math.max(0, date - Date.now());
+}
 
 export function parseStartGgEventInput(input: string): string {
   const trimmed = input.trim();
@@ -396,6 +447,7 @@ export function normalizeStartGgEvent(
           id: group.id,
           name: group.displayIdentifier ?? phase.name,
           phaseName: phase.name,
+          setsLoaded: group.sets !== null && group.sets !== undefined,
           sets: (group.sets?.nodes ?? []).flatMap((set) =>
             set === null ? [] : [normalizeSet(set, group.id, phase.name)],
           ),
@@ -418,8 +470,16 @@ export function normalizeStartGgEvent(
 export class StartGgProvider implements TournamentDataProvider {
   public readonly descriptor: ProviderDescriptor;
   readonly #client: GraphQLClient | null;
+  readonly #requestIntervalMs: number;
+  readonly #requestTimeoutMs: number;
+  readonly #rateLimitRetryDelaysMs: readonly number[];
+  #lastRequestStartedAt = 0;
+  #requestQueue: Promise<void> = Promise.resolve();
 
-  public constructor(token: string | undefined) {
+  public constructor(
+    token: string | undefined,
+    options: StartGgProviderOptions = {},
+  ) {
     const configured = token !== undefined && token.trim().length > 0;
     this.descriptor = {
       id: "startgg",
@@ -429,40 +489,46 @@ export class StartGgProvider implements TournamentDataProvider {
     this.#client = configured
       ? new GraphQLClient(STARTGG_ENDPOINT, {
           headers: { authorization: `Bearer ${token.trim()}` },
+          ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         })
       : null;
+    this.#requestIntervalMs =
+      options.requestIntervalMs ?? DEFAULT_REQUEST_INTERVAL_MS;
+    this.#requestTimeoutMs =
+      options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.#rateLimitRetryDelaysMs =
+      options.rateLimitRetryDelaysMs ?? DEFAULT_RATE_LIMIT_RETRY_DELAYS_MS;
   }
 
-  public async loadEvent(input: string): Promise<NormalizedEvent> {
-    const client = this.#requireClient();
+  public async loadEvent(
+    input: string,
+    options: ProviderRequestOptions = {},
+  ): Promise<NormalizedEvent> {
+    this.#requireClient();
     const slug = parseStartGgEventInput(input);
-    const response: unknown = await client.request(EVENT_METADATA_QUERY, { slug });
-    const event = normalizeStartGgEvent(response);
-    const phaseGroups = [];
+    const response = await this.#request(
+      EVENT_METADATA_QUERY,
+      { slug },
+      options.signal,
+    );
+    return normalizeStartGgEvent(response);
+  }
 
-    for (const phaseGroup of event.phaseGroups) {
-      phaseGroups.push({
-        ...phaseGroup,
-        sets: await this.#loadPhaseGroupSets(
-          client,
-          phaseGroup.id,
-          phaseGroup.phaseName,
-        ),
-      });
-    }
-
-    return {
-      ...event,
-      phaseGroups,
-      fetchedAt: new Date().toISOString(),
-    };
+  public async loadPhaseGroupSets(
+    phaseGroupId: string,
+    phaseName: string,
+    options: PhaseGroupLoadOptions = {},
+  ): Promise<readonly NormalizedSet[]> {
+    this.#requireClient();
+    return this.#loadPhaseGroupSets(phaseGroupId, phaseName, options);
   }
 
   public async loadSet(
     setId: string,
     event: NormalizedEvent,
+    options: ProviderRequestOptions = {},
   ): Promise<NormalizedSet> {
-    const client = this.#requireClient();
+    this.#requireClient();
     const existing = event.phaseGroups
       .flatMap((phaseGroup) => phaseGroup.sets)
       .find((set) => set.id === setId);
@@ -473,7 +539,11 @@ export class StartGgProvider implements TournamentDataProvider {
       );
     }
 
-    const response: unknown = await client.request(SET_QUERY, { id: setId });
+    const response = await this.#request(
+      SET_QUERY,
+      { id: setId },
+      options.signal,
+    );
     const parsed = setResponseSchema.safeParse(response);
     if (!parsed.success) {
       throw new ProviderError(
@@ -507,20 +577,24 @@ export class StartGgProvider implements TournamentDataProvider {
   }
 
   async #loadPhaseGroupSets(
-    client: GraphQLClient,
     phaseGroupId: string,
     phaseName: string,
+    options: PhaseGroupLoadOptions,
   ): Promise<NormalizedSet[]> {
     const sets: NormalizedSet[] = [];
     let page = 1;
     let totalPages = 1;
 
     while (page <= totalPages) {
-      const response: unknown = await client.request(PHASE_GROUP_SETS_QUERY, {
-        id: phaseGroupId,
-        page,
-        perPage: SETS_PER_PAGE,
-      });
+      const response = await this.#request(
+        PHASE_GROUP_SETS_QUERY,
+        {
+          id: phaseGroupId,
+          page,
+          perPage: SETS_PER_PAGE,
+        },
+        options.signal,
+      );
       const parsed = phaseGroupSetsResponseSchema.safeParse(response);
       if (!parsed.success) {
         throw new ProviderError(
@@ -542,14 +616,100 @@ export class StartGgProvider implements TournamentDataProvider {
       }
 
       totalPages = connection.pageInfo.totalPages;
+      if (totalPages === 0) {
+        return sets;
+      }
       for (const rawSet of connection.nodes ?? []) {
         if (rawSet !== null) {
           sets.push(normalizeSet(rawSet, phaseGroupId, phaseName));
         }
       }
+      options.onProgress?.({
+        loadedPages: page,
+        totalPages,
+        sets: [...sets],
+      });
       page += 1;
     }
 
     return sets;
+  }
+
+  async #request(
+    document: string,
+    variables: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+  ): Promise<unknown> {
+    const request = this.#requestQueue.then(() =>
+      this.#requestWithRetry(document, variables, signal),
+    );
+    this.#requestQueue = request.then(
+      () => undefined,
+      () => undefined,
+    );
+    return request;
+  }
+
+  async #requestWithRetry(
+    document: string,
+    variables: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+  ): Promise<unknown> {
+    for (let attempt = 0; ; attempt += 1) {
+      await this.#paceRequest(signal);
+      const timeoutSignal = AbortSignal.timeout(this.#requestTimeoutMs);
+      const requestSignal =
+        signal === undefined
+          ? timeoutSignal
+          : AbortSignal.any([signal, timeoutSignal]);
+
+      try {
+        return await this.#requireClient().request({
+          document,
+          variables,
+          signal: requestSignal,
+        });
+      } catch (error) {
+        if (signal?.aborted === true) {
+          throw abortReason(signal);
+        }
+        if (timeoutSignal.aborted) {
+          throw new ProviderError(
+            "request_timeout",
+            `StartGG did not respond within ${String(Math.ceil(this.#requestTimeoutMs / 1_000))} seconds.`,
+            { cause: error },
+          );
+        }
+        if (error instanceof ClientError && error.response.status === 429) {
+          const fallbackDelay = this.#rateLimitRetryDelaysMs[attempt];
+          if (fallbackDelay === undefined) {
+            throw new ProviderError(
+              "rate_limited",
+              "StartGG is still rate limiting requests. Wait before refreshing again.",
+              { cause: error },
+            );
+          }
+          await waitForDelay(retryAfterMs(error, fallbackDelay), signal);
+          continue;
+        }
+        if (error instanceof ClientError) {
+          throw new ProviderError(
+            "provider_request_failed",
+            `StartGG request failed with HTTP ${String(error.response.status)}.`,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+    }
+  }
+
+  async #paceRequest(signal: AbortSignal | undefined): Promise<void> {
+    const waitMs = Math.max(
+      0,
+      this.#lastRequestStartedAt + this.#requestIntervalMs - Date.now(),
+    );
+    await waitForDelay(waitMs, signal);
+    this.#lastRequestStartedAt = Date.now();
   }
 }

@@ -1,7 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { OverlayApp } from "./OverlayApp.tsx";
-import "./styles.css";
+import { OverlayRuntime } from "./runtime/OverlayRuntime.tsx";
 
 const root = document.querySelector<HTMLDivElement>("#root");
 if (root === null) {
@@ -10,6 +9,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <OverlayApp />
+    <OverlayRuntime />
   </StrictMode>,
 );

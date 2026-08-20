@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveOverlayView,
+  operatorStateSchema,
   type NormalizedEvent,
   type NormalizedSet,
 } from "./contracts.ts";
@@ -48,7 +49,13 @@ const event: NormalizedEvent = {
   name: "Ultimate Singles",
   tournamentName: "Octagon Open",
   phaseGroups: [
-    { id: "group-1", name: "Top 8", phaseName: "Top 8", sets: [set] },
+    {
+      id: "group-1",
+      name: "Top 8",
+      phaseName: "Top 8",
+      setsLoaded: true,
+      sets: [set],
+    },
   ],
   fetchedAt: "2026-08-19T00:00:00.000Z",
 };
@@ -60,7 +67,7 @@ describe("deriveOverlayView", () => {
       4,
       event,
       set,
-      { sideOrder: "swapped" },
+      { sideOrder: "swapped", overlayTemplateId: "octagon" },
       "fresh",
     );
 
@@ -68,5 +75,17 @@ describe("deriveOverlayView", () => {
     expect(view.players[1]?.sourceEntrantId).toBe("p1");
     expect(set.entrants[0]).toBe(originalFirst);
     expect(set.entrants[0]?.entrant.id).toBe("p1");
+  });
+
+  it("defaults older persisted scenes to the Octagon template", () => {
+    const parsed = operatorStateSchema.parse({
+      providerId: "startgg",
+      eventInput: "",
+      selectedPhaseGroupId: null,
+      selectedSetId: null,
+      presentation: { sideOrder: "normal" },
+    });
+
+    expect(parsed.presentation.overlayTemplateId).toBe("octagon");
   });
 });

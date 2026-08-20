@@ -15,7 +15,7 @@ npm run dev
 Open:
 
 - Dashboard: <http://127.0.0.1:5173>
-- Octagon overlay: <http://127.0.0.1:5174/overlay/octagon/>
+- Live overlay: <http://127.0.0.1:5174/overlay/>
 - Local server: <http://127.0.0.1:3100>
 
 ## StartGG setup
@@ -47,7 +47,7 @@ npm start
 The production server serves:
 
 - Dashboard: <http://127.0.0.1:3100/>
-- Octagon overlay: <http://127.0.0.1:3100/overlay/octagon/>
+- Live overlay: <http://127.0.0.1:3100/overlay/>
 - Health JSON: <http://127.0.0.1:3100/api/health>
 - WebSocket: `ws://127.0.0.1:3100/ws`
 
@@ -57,11 +57,11 @@ Use the dashboard's **Copy OBS URL** or **Open overlay** action instead of const
 
 1. Run the production server.
 2. Add an OBS **Browser** source.
-3. Use `http://127.0.0.1:3100/overlay/octagon/`.
+3. Use `http://127.0.0.1:3100/overlay/`.
 4. Set width to `1920` and height to `1080`.
 5. Enable **Refresh browser when scene becomes active** if desired.
 
-The page background is transparent. The overlay reconnects automatically and receives a complete snapshot after reconnecting; it never contacts StartGG directly.
+The page background is transparent. The overlay reconnects automatically and receives a complete snapshot after reconnecting; it never contacts StartGG directly. Choose **Octagon** or **Minimal** from the dashboard's live-scene rail and the existing OBS source switches immediately. To pin a source to one design, add `?template=octagon` or `?template=minimal` to its URL.
 
 ## Architecture
 
@@ -69,7 +69,7 @@ The page background is transparent. The overlay reconnects automatically and rec
 src/
   server/        Fastify API, WebSocket hub, polling, state, static hosting
   dashboard/     React/Vite operator surface
-  overlay/       React/Vite transparent OBS composition
+  overlay/       Shared OBS runtime and repository-hosted template registry
   providers/     Provider interface, registry, and StartGG adapter
   shared/        Domain contracts, message schemas, and browser socket client
 ```
@@ -83,7 +83,7 @@ Operator choices are persisted atomically to `.data/operator-state.json` with a 
 Clients connect to `/ws` and identify themselves:
 
 ```json
-{"type":"client.hello","protocolVersion":1,"client":"dashboard"}
+{"type":"client.hello","protocolVersion":3,"client":"dashboard"}
 ```
 
 The server answers with the complete current state:
@@ -98,7 +98,7 @@ Dashboard commands are correlated:
 {
   "type":"command",
   "commandId":"operator-42",
-  "command":{"type":"presentation.swap-sides"}
+  "command":{"type":"overlay.select","templateId":"minimal"}
 }
 ```
 
@@ -106,13 +106,25 @@ The server responds with `command.ack` or `command.error`, then broadcasts a fre
 
 ## Polling and rate limits
 
-- Event/bracket data loads on event selection and explicit refresh.
+- Event metadata loads first; sets are fetched lazily for the selected phase group.
+- Phase-group pages are requested sequentially through a shared one-request-per-second limiter.
+- Rate-limit responses honor `Retry-After` and otherwise use bounded exponential backoff.
+- List queries fetch lightweight entrant data; full profiles load only for the selected set.
 - Only the selected set is polled, once centrally by the server.
 - The default interval is 15 seconds (`POLL_INTERVAL_MS`).
 - Provider failures use bounded exponential backoff, capped at 120 seconds.
 - Connection state distinguishes idle, loading, fresh, stale, and error, with the last successful update exposed to clients.
 
 This keeps StartGG request volume independent of dashboard or overlay client count. Operators should still choose an interval appropriate for their event and StartGG allowance.
+
+## Add an overlay design
+
+1. Add a self-contained component, stylesheet, and assets under `src/overlay/templates/<id>/`.
+2. Add its public metadata and ID to `src/shared/overlay-templates.ts`.
+3. Register its lazy import in `src/overlay/registry.ts`.
+4. Render only the provider-neutral `OverlayView` passed to the template.
+
+The dashboard automatically builds its design switcher from the shared metadata. Templates reuse the same WebSocket connection, scaling, loading state, and stable `/overlay/` OBS URL.
 
 ## Add a provider
 
@@ -142,6 +154,6 @@ CI runs install, lint, typecheck, tests, and build on Node 24.
 
 - StartGG is read-only.
 - Public StartGG GraphQL does not expose live stage-strike, DSR task state, or the complete TournamentStreamHelper workflow; those features are intentionally outside this MVP.
-- Large phase groups are limited by the adapter's current GraphQL page sizes rather than exhaustively paginated.
+- Large phase groups can take time to load because StartGG pages are fetched conservatively to stay within provider limits.
 - Optional entrant metadata such as pronouns, social handle, and location is shown only when a provider supplies it.
 - The server is local and single-operator; it has no authentication or remote multi-user conflict model.

@@ -5,6 +5,7 @@ import {
   type NormalizedSet,
   type ServerState,
 } from "../shared/contracts.ts";
+import { OVERLAY_TEMPLATES } from "../shared/overlay-templates.ts";
 import {
   useMemo,
   useState,
@@ -27,9 +28,9 @@ function formatTime(value: string | null): string {
 
 function overlayUrl(): string {
   if (import.meta.env.DEV) {
-    return `${window.location.protocol}//${window.location.hostname}:5174/overlay/octagon/`;
+    return `${window.location.protocol}//${window.location.hostname}:5174/overlay/`;
   }
-  return new URL("/overlay/octagon/", window.location.origin).toString();
+  return new URL("/overlay/", window.location.origin).toString();
 }
 
 function entrantLabel(set: NormalizedSet): string {
@@ -153,6 +154,8 @@ function BracketWorkspace({
           <p>
             {group === undefined
               ? "Load an event to browse its phase groups."
+              : !group.setsLoaded && state.connection.message !== null
+                ? state.connection.message
               : `${visibleSetCount.toString()} visible sets · ${rounds.length.toString()} rounds`}
           </p>
         </div>
@@ -186,6 +189,11 @@ function BracketWorkspace({
           <AnchorIcon />
           <h2>No bracket loaded</h2>
           <p>Enter a StartGG event URL or slug in the controls above.</p>
+        </div>
+      ) : !group.setsLoaded && rounds.length === 0 ? (
+        <div className="empty-state">
+          <h2>Loading bracket</h2>
+          <p>{state.connection.message ?? "Fetching sets from StartGG…"}</p>
         </div>
       ) : rounds.length === 0 ? (
         <div className="empty-state">
@@ -237,6 +245,11 @@ function SceneRail({
   const selectedSet = findSet(state.event, state.operator.selectedSetId);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const url = overlayUrl();
+  const activeTemplate =
+    OVERLAY_TEMPLATES.find(
+      (template) =>
+        template.id === state.operator.presentation.overlayTemplateId,
+    ) ?? OVERLAY_TEMPLATES[0];
 
   const copy = async (): Promise<void> => {
     try {
@@ -284,9 +297,33 @@ function SceneRail({
         </button>
       </div>
 
+      <fieldset className="overlay-picker">
+        <legend>Overlay design</legend>
+        <div>
+          {OVERLAY_TEMPLATES.map((template) => (
+            <button
+              type="button"
+              key={template.id}
+              aria-pressed={template.id === activeTemplate.id}
+              onClick={() =>
+                send({
+                  type: "overlay.select",
+                  templateId: template.id,
+                })
+              }
+            >
+              {template.name}
+            </button>
+          ))}
+        </div>
+        <p>{activeTemplate.description}</p>
+      </fieldset>
+
       <section className="overlay-link">
         <h3>OBS browser source</h3>
-        <p>1920 × 1080 · transparent background</p>
+        <p>
+          {activeTemplate.name} · 1920 × 1080 · transparent background
+        </p>
         <code>{url}</code>
         <div>
           <button
@@ -386,8 +423,12 @@ export function App(): ReactNode {
               onChange={(event) => setEventInput(event.target.value)}
             />
           </label>
-          <button className="button button--load" type="submit">
-            Load event
+          <button
+            className="button button--load"
+            type="submit"
+            disabled={state.connection.status === "loading"}
+          >
+            {state.connection.status === "loading" ? "Loading…" : "Load event"}
           </button>
         </form>
 
@@ -416,17 +457,21 @@ export function App(): ReactNode {
             <strong>
               {state.connection.status === "error"
                 ? "Provider needs attention"
-                : "Showing last known tournament data"}
+                : state.connection.status === "loading"
+                  ? "Loading tournament data"
+                  : "Showing last known tournament data"}
             </strong>
             <small>{state.connection.message ?? error}</small>
           </span>
-          <button
-            className="button button--small"
-            type="button"
-            onClick={() => sendCommand({ type: "refresh" })}
-          >
-            Try again
-          </button>
+          {state.connection.status !== "loading" && (
+            <button
+              className="button button--small"
+              type="button"
+              onClick={() => sendCommand({ type: "refresh" })}
+            >
+              Try again
+            </button>
+          )}
         </div>
       )}
 
@@ -457,7 +502,7 @@ export function App(): ReactNode {
               }
             >
               {group.name}
-              <small>{group.sets.length}</small>
+              <small>{group.setsLoaded ? group.sets.length : "…"}</small>
             </button>
           ))}
         </div>

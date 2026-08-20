@@ -668,6 +668,69 @@ select:focus-visible {
   border-color: #969daf;
 }
 
+.overlay-picker {
+  min-width: 0;
+  margin: 22px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.overlay-picker legend {
+  margin-bottom: 9px;
+  color: var(--sand);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.overlay-picker > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: #131a2a;
+  border: 1px solid #61697d;
+  border-radius: var(--radius-control);
+}
+
+.overlay-picker button {
+  min-height: 38px;
+  padding: 6px 10px;
+  color: var(--paper);
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.overlay-picker button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.overlay-picker button[aria-pressed="true"] {
+  color: var(--deep);
+  background: var(--sand);
+  border-color: var(--brass);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.32);
+}
+
+.overlay-picker button:focus-visible {
+  outline: 3px solid var(--brass);
+  outline-offset: 2px;
+}
+
+.overlay-picker p {
+  min-height: 36px;
+  margin: 9px 0 0;
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .overlay-link {
   margin-top: 24px;
   padding-top: 20px;
