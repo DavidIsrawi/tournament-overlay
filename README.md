@@ -84,6 +84,21 @@ publishes each archive and a `SHA256SUMS.txt` file to the corresponding GitHub
 Release. The macOS executables are ad-hoc signed; public distribution without a
 Gatekeeper warning requires a Developer ID certificate and notarization.
 
+Create a release from a clean, synchronized `main` branch with one semantic
+version flag:
+
+```bash
+npm run release -- --patch
+npm run release -- --minor
+npm run release -- --major
+```
+
+The wrapper fetches tags, confirms local `main` exactly matches `origin/main`,
+runs lint, tests, and the production build, then uses `npm version` to update
+`package.json` and `package-lock.json`. It creates a `Release vX.Y.Z` commit and
+annotated `vX.Y.Z` tag, then atomically pushes both. Use `--dry-run` with a
+version flag to run every check without changing or pushing anything.
+
 ## OBS browser source
 
 1. Run the production server.
