@@ -279,7 +279,9 @@ function SceneRail({
       <div className="scene__players" aria-label="Overlay side order">
         {state.overlay.players.map((player, index) => (
           <div className={`scene-player scene-player--${index + 1}`} key={index}>
-            <span>{index === 0 ? "Port" : "Starboard"}</span>
+            <span>
+              {player?.prefix?.trim() || null}
+            </span>
             <strong>{player?.displayName ?? "TBD"}</strong>
             <b>{player?.score ?? "—"}</b>
           </div>
