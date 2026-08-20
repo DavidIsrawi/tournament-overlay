@@ -5,6 +5,10 @@ import {
   type ClientMessage,
   type ServerState,
 } from "./contracts.ts";
+import {
+  deriveOverlayAnimationEvents,
+  type OverlayAnimationEvent,
+} from "./overlay-events.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type SocketStatus =
@@ -17,6 +21,7 @@ interface TournamentSocket {
   readonly state: ServerState | null;
   readonly socketStatus: SocketStatus;
   readonly error: string | null;
+  readonly animationEvents: readonly OverlayAnimationEvent[];
   readonly sendCommand: (command: ClientCommand) => boolean;
 }
 
@@ -32,7 +37,12 @@ export function useTournamentSocket(
   const [socketStatus, setSocketStatus] =
     useState<SocketStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
+  const [animationEvents, setAnimationEvents] = useState<
+    readonly OverlayAnimationEvent[]
+  >([]);
   const socketRef = useRef<WebSocket | null>(null);
+  const stateRef = useRef<ServerState | null>(null);
+  const nextAnimationSequenceRef = useRef(1);
 
   useEffect(() => {
     let active = true;
@@ -78,6 +88,14 @@ export function useTournamentSocket(
           return;
         }
         if (message.data.type === "state.snapshot") {
+          const events = deriveOverlayAnimationEvents(
+            stateRef.current?.overlay ?? null,
+            message.data.state.overlay,
+            nextAnimationSequenceRef.current,
+          );
+          nextAnimationSequenceRef.current += events.length;
+          stateRef.current = message.data.state;
+          setAnimationEvents(events);
           setState(message.data.state);
           return;
         }
@@ -129,5 +147,5 @@ export function useTournamentSocket(
     return true;
   }, []);
 
-  return { state, socketStatus, error, sendCommand };
+  return { state, socketStatus, error, animationEvents, sendCommand };
 }

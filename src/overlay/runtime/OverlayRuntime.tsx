@@ -43,7 +43,8 @@ function requestedTemplate(): {
 }
 
 export function OverlayRuntime(): ReactNode {
-  const { state, socketStatus } = useTournamentSocket("overlay");
+  const { state, socketStatus, animationEvents } =
+    useTournamentSocket("overlay");
   const scale = useStageScale();
   const request = useMemo(requestedTemplate, []);
   const templateId =
@@ -84,6 +85,7 @@ export function OverlayRuntime(): ReactNode {
         <Template
           view={state.overlay}
           connected={socketStatus === "connected"}
+          animationEvents={animationEvents}
         />
       </Suspense>
     </div>

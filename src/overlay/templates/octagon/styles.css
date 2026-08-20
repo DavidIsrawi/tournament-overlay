@@ -1,7 +1,6 @@
 .scoreboard {
   position: absolute;
   inset: 0;
-  animation: set-arrive 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .player {
@@ -128,21 +127,60 @@
   font: 900 52px/1 "Arial Black", "Avenir Next", sans-serif;
 }
 
+.score__effects {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 .score__ring {
   position: absolute;
   inset: -3px;
-  z-index: 1;
-  pointer-events: none;
-  border: 3px solid transparent;
+  z-index: 7;
+  border: 3px solid var(--brass);
   border-radius: inherit;
+  animation: score-ring 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .score--changed {
-  animation: score-bell 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: score-bell 550ms both;
 }
 
-.score--changed .score__ring {
-  animation: score-ring 520ms ease-out;
+.score--changed > strong {
+  animation: score-new 350ms 70ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.score__old {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  font: 900 52px/1 "Arial Black", "Avenir Next", sans-serif;
+  animation: score-old 240ms cubic-bezier(0.55, 0, 1, 0.45) both;
+}
+
+.score__particle {
+  --particle-x: 24px;
+  --particle-y: -18px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 8;
+  width: 11px;
+  height: 11px;
+  margin: -5px;
+  background: var(--brass);
+  border: 2px solid var(--deep);
+  border-radius: 50%;
+  animation: score-particle 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.score__particle--two {
+  --particle-x: -29px;
+  --particle-y: -25px;
+  animation-delay: 25ms;
 }
 
 .chips {
@@ -222,7 +260,8 @@
     0 0 0 9px var(--deep),
     0 10px 10px rgba(0, 0, 0, 0.34);
   transform: rotate(var(--helm-turn));
-  transition: transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    transform var(--helm-duration) var(--helm-easing);
 }
 
 .helm__bolt {
@@ -240,6 +279,10 @@
   transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-70px);
 }
 
+.helm__bolt--pulse {
+  animation: fitting-pulse 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .helm__logo {
   width: 98px;
   height: 98px;
@@ -247,7 +290,8 @@
   background: url("./octagon-logo.png") center / contain no-repeat;
   filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.25));
   transform: rotate(calc(-1 * var(--helm-turn)));
-  transition: transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    transform var(--helm-duration) var(--helm-easing);
 }
 
 .event-plate {
@@ -404,31 +448,20 @@
   border-radius: 50%;
 }
 
-@keyframes set-arrive {
-  from {
-    opacity: 0;
-    filter: blur(7px);
-    clip-path: inset(0 50% 0 50%);
-  }
-
-  to {
-    opacity: 1;
-    filter: blur(0);
-    clip-path: inset(0);
-  }
-}
-
 @keyframes score-bell {
   0% {
     transform: scale(1);
+    animation-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53);
   }
 
-  28% {
-    transform: scale(0.9);
+  13% {
+    transform: scale(0.92);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  58% {
+  42% {
     transform: scale(1.16);
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   100% {
@@ -439,26 +472,85 @@
 @keyframes score-ring {
   from {
     opacity: 0.95;
-    border-color: var(--brass);
     transform: scale(0.88);
   }
 
   to {
     opacity: 0;
-    border-color: var(--brass);
-    transform: scale(1.35);
+    transform: scale(1.32);
+  }
+}
+
+@keyframes score-old {
+  from {
+    opacity: 0.85;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-26px);
+  }
+}
+
+@keyframes score-new {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes score-particle {
+  from {
+    opacity: 0.9;
+    transform: translate(0, 0) scale(0.65);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(var(--particle-x), var(--particle-y)) scale(1.15);
+  }
+}
+
+@keyframes fitting-pulse {
+  from {
+    background: var(--white);
+    filter: brightness(1.75);
+  }
+
+  to {
+    background: var(--brass);
+    filter: brightness(1);
+  }
+}
+
+@keyframes score-reduced {
+  from {
+    filter: brightness(1.4);
+  }
+
+  to {
+    filter: brightness(1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scoreboard,
-  .score--changed,
-  .score--changed .score__ring {
+  .score--changed {
+    animation: score-reduced 180ms ease-out;
+  }
+
+  .score--changed > strong,
+  .helm__bolt--pulse {
     animation: none;
   }
 
-  .score--changed {
-    filter: brightness(1.18);
+  .score__effects {
+    display: none;
   }
 
   .helm,
