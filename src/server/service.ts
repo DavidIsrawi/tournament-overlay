@@ -419,7 +419,11 @@ export class TournamentService {
     const group = state.event?.phaseGroups.find(
       (candidate) => candidate.id === set.phaseGroupId,
     );
-    if (group?.setsLoaded === false) {
+    if (
+      group?.setsLoaded === false &&
+      set.phaseGroupId === state.operator.selectedPhaseGroupId &&
+      state.connection.status === "loading"
+    ) {
       const operator: OperatorState = {
         ...state.operator,
         selectedPhaseGroupId: set.phaseGroupId,
