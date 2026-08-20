@@ -446,4 +446,32 @@ describe("TournamentService", () => {
 
     expect(pollCount).toBe(1);
   });
+
+  it("publishes provider configuration changes", async () => {
+    const unavailableProvider: TournamentDataProvider = {
+      descriptor: { id: "startgg", name: "StartGG", configured: false },
+      loadEvent: () => Promise.reject(new Error("Not configured")),
+      loadPhaseGroupSets: () => Promise.reject(new Error("Not configured")),
+      loadSet: () => Promise.reject(new Error("Not configured")),
+    };
+    const configuredProvider: TournamentDataProvider = {
+      ...unavailableProvider,
+      descriptor: { id: "startgg", name: "StartGG", configured: true },
+    };
+    const directory = await mkdtemp(join(tmpdir(), "overlay-provider-"));
+    directories.push(directory);
+    const service = new TournamentService(
+      new ProviderRegistry([unavailableProvider]),
+      new AtomicOperatorStateStore(join(directory, "state.json")),
+      120_000,
+    );
+
+    service.replaceProvider(configuredProvider);
+
+    expect(service.getState().providers).toEqual([
+      { id: "startgg", name: "StartGG", configured: true },
+    ]);
+    expect(service.getState().connection.status).toBe("idle");
+    service.close();
+  });
 });

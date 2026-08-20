@@ -570,7 +570,7 @@ export class StartGgProvider implements TournamentDataProvider {
     if (this.#client === null) {
       throw new ProviderError(
         "missing_token",
-        "StartGG is not configured. Add STARTGG_API_TOKEN to .env and restart the server.",
+        "StartGG is not configured. Save an API token in the local setup screen.",
       );
     }
     return this.#client;

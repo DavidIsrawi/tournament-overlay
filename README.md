@@ -22,10 +22,18 @@ Open:
 
 1. Sign in at [start.gg](https://www.start.gg/).
 2. Open **Developer Settings** from your profile and create an API token.
-3. Copy `.env.example` to `.env` and set `STARTGG_API_TOKEN`.
+3. Start the app and paste the token into the first-run setup screen. For
+   development, you can instead copy `.env.example` to `.env` and set
+   `STARTGG_API_TOKEN`.
 4. In the dashboard, choose **StartGG**, enter an event URL or slug, and load it.
 
-`STARTGG_API_TOKEN` is read only by the server and is never sent to either browser client or written to the state file. Keep `.env` private. The adapter calls only the official read-only GraphQL endpoint, `https://api.start.gg/gql/alpha`, and contains no mutations or undocumented website calls.
+The setup screen stores the token in the current user's local configuration
+directory with owner-only file permissions. It is read only by the server and
+is never included in browser state, sent to OBS, or written to the operator
+state file. Keep the local configuration and `.env` private. The adapter calls
+only the official read-only GraphQL endpoint,
+`https://api.start.gg/gql/alpha`, and contains no mutations or undocumented
+website calls.
 
 Accepted event inputs include:
 
@@ -52,6 +60,29 @@ The production server serves:
 - WebSocket: `ws://127.0.0.1:3100/ws`
 
 Use the dashboard's **Copy OBS URL** or **Open overlay** action instead of constructing the URL manually.
+
+## Local executable
+
+Build a native executable package for the current operating system and CPU:
+
+```bash
+npm run build:executable
+```
+
+The package is written to `dist/executable/` and contains the executable plus
+the static `public/` directory. It bundles the Node runtime, so the destination
+machine does not need Node.js installed. Launching the executable starts the
+local server, opens the dashboard in the default browser, and keeps the OBS URL
+available at <http://127.0.0.1:3100/overlay/> while the process is running.
+
+Build each release on its target operating system; the injected Node executable
+is platform- and architecture-specific.
+
+Tagged versions matching `v*` are built and smoke-tested by GitHub Actions for
+macOS Apple Silicon, macOS Intel, Windows x64, and Linux x64. The workflow
+publishes each archive and a `SHA256SUMS.txt` file to the corresponding GitHub
+Release. The macOS executables are ad-hoc signed; public distribution without a
+Gatekeeper warning requires a Developer ID certificate and notarization.
 
 ## OBS browser source
 

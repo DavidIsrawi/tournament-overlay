@@ -68,7 +68,12 @@ export class ProviderRegistry {
         `Provider "${id}" is not registered.`,
       );
     }
+
     return provider;
+  }
+
+  public replace(provider: TournamentDataProvider): void {
+    this.#providers.set(provider.descriptor.id, provider);
   }
 
   public has(id: ProviderId): boolean {

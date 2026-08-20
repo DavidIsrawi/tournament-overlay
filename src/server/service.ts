@@ -78,6 +78,30 @@ export class TournamentService {
     return this.#hub.subscribe(listener);
   }
 
+  public replaceProvider(provider: TournamentDataProvider): void {
+    if (this.#closed) {
+      throw new Error("Tournament service is closed.");
+    }
+    this.#pollGeneration += 1;
+    this.#cancelPoll();
+    this.#abortActiveRequest();
+    this.providers.replace(provider);
+    const current = this.getState();
+    this.#commit({
+      providers: this.providers.list(),
+      connection: {
+        status: current.event === null ? "idle" : "stale",
+        message:
+          current.event === null
+            ? null
+            : "Provider settings changed. Refresh to verify the current event.",
+        lastUpdatedAt: current.connection.lastUpdatedAt,
+        nextPollAt: null,
+        failureCount: 0,
+      },
+    });
+  }
+
   public initialize(): Promise<void> {
     const restore = this.#restoreOperator();
     this.#operatorReady = restore.then(
@@ -606,7 +630,7 @@ export class TournamentService {
 
   #commit(
     patch: Partial<
-      Pick<ServerState, "operator" | "connection" | "event">
+      Pick<ServerState, "providers" | "operator" | "connection" | "event">
     >,
   ): void {
     const current = this.getState();

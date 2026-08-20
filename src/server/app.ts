@@ -8,7 +8,18 @@ import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { RawData, WebSocket } from "ws";
+import { z } from "zod";
 import type { TournamentService } from "./service.ts";
+
+const startGgTokenSchema = z
+  .object({
+    token: z.string().trim().min(1).max(4_096),
+  })
+  .strict();
+
+export interface CredentialSettings {
+  readonly saveStartGgToken: (token: string) => Promise<void>;
+}
 
 function send(socket: WebSocket, message: ServerMessage): void {
   if (socket.readyState === 1) {
@@ -29,6 +40,7 @@ function rawDataToText(data: RawData): string {
 export async function buildApp(
   service: TournamentService,
   publicDirectory: string,
+  credentialSettings?: CredentialSettings,
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
   await app.register(fastifyWebsocket);
@@ -43,6 +55,19 @@ export async function buildApp(
       connection: state.connection,
     };
   });
+
+  if (credentialSettings !== undefined) {
+    app.post("/api/settings/startgg-token", async (request, reply) => {
+      const parsed = startGgTokenSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: "Enter a valid StartGG API token.",
+        });
+      }
+      await credentialSettings.saveStartGgToken(parsed.data.token);
+      return reply.code(204).send();
+    });
+  }
 
   app.get("/ws", { websocket: true }, (socket) => {
     let identified = false;
