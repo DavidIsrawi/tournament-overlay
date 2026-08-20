@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, posix, win32 } from "node:path";
 import { z } from "zod";
 
 const localConfigSchema = z.object({
@@ -30,20 +30,21 @@ export function defaultUserConfigDirectory(
 ): string {
   switch (platform) {
     case "darwin":
-      return join(
+      return posix.join(
         homeDirectory,
         "Library",
         "Application Support",
         "Tournament Overlay",
       );
     case "win32":
-      return join(
-        environment.APPDATA ?? join(homeDirectory, "AppData", "Roaming"),
+      return win32.join(
+        environment.APPDATA ??
+          win32.join(homeDirectory, "AppData", "Roaming"),
         "Tournament Overlay",
       );
     default:
-      return join(
-        environment.XDG_CONFIG_HOME ?? join(homeDirectory, ".config"),
+      return posix.join(
+        environment.XDG_CONFIG_HOME ?? posix.join(homeDirectory, ".config"),
         "tournament-overlay",
       );
   }
