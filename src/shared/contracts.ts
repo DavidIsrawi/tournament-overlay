@@ -5,7 +5,7 @@ import {
   type OverlayTemplateId,
 } from "./overlay-templates.ts";
 
-export const PROTOCOL_VERSION = 3 as const;
+export const PROTOCOL_VERSION = 4 as const;
 
 export type ProviderId = "startgg" | (string & {});
 
@@ -87,6 +87,7 @@ export interface OverlayPlayer {
   readonly pronouns: string | null;
   readonly social: string | null;
   readonly location: string | null;
+  readonly country: string | null;
   readonly isWinner: boolean;
 }
 
@@ -294,6 +295,7 @@ const overlayPlayerSchema = z.object({
   pronouns: z.string().nullable(),
   social: z.string().nullable(),
   location: z.string().nullable(),
+  country: z.string().nullable(),
   isWinner: z.boolean(),
 });
 
@@ -346,14 +348,8 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
 ]);
 
 export function formatEntrantLocation(entrant: EntrantProfile): string | null {
-  if (entrant.location === null) {
-    return null;
-  }
-
-  const parts = [entrant.location.state, entrant.location.country].filter(
-    (part): part is string => part !== null && part.length > 0,
-  );
-  return parts.length > 0 ? parts.join(", ") : null;
+  const state = entrant.location?.state?.trim();
+  return state === undefined || state.length === 0 ? null : state;
 }
 
 export function deriveOverlayView(
@@ -390,6 +386,7 @@ export function deriveOverlayView(
       pronouns: slot.entrant.pronouns,
       social: slot.entrant.social,
       location: formatEntrantLocation(slot.entrant),
+      country: slot.entrant.location?.country ?? null,
       isWinner: set.winnerId === slot.entrant.id,
     } satisfies OverlayPlayer;
   }) as [OverlayPlayer | null, OverlayPlayer | null];

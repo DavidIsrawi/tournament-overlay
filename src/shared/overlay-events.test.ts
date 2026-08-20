@@ -12,6 +12,7 @@ function player(id: string, score: number | null): OverlayPlayer {
     pronouns: null,
     social: null,
     location: null,
+    country: null,
     isWinner: false,
   };
 }

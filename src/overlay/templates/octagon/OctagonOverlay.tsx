@@ -2,6 +2,7 @@ import type {
   OverlayPlayer,
   OverlayView,
 } from "../../../shared/contracts.ts";
+import { countryFlagEmoji } from "../../../shared/country-flags.ts";
 import type { OverlayAnimationEvent } from "../../../shared/overlay-events.ts";
 import {
   useEffect,
@@ -231,6 +232,7 @@ function PlayerPlate({
   readonly side: "port" | "starboard";
   readonly scoreEvent: ScoreAnimationEvent | undefined;
 }): ReactNode {
+  const flag = countryFlagEmoji(player?.country ?? null);
   const chips: ReactNode[] = [
     player?.seed === null || player?.seed === undefined ? null : (
       <Chip key="seed" label="Seed">
@@ -247,9 +249,18 @@ function PlayerPlate({
         {player.pronouns}
       </Chip>
     ),
-    player?.location === null || player?.location === undefined ? null : (
+    player === null || (player.location === null && flag === null) ? null : (
       <Chip key="location" label="From">
-        {player.location}
+        {flag === null ? null : (
+          <span
+            className="chip__flag"
+            role="img"
+            aria-label={`${player.country ?? "Country"} flag`}
+          >
+            {flag}
+          </span>
+        )}
+        {player.location ?? null}
       </Chip>
     ),
   ];

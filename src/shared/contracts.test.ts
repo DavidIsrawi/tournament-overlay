@@ -73,6 +73,8 @@ describe("deriveOverlayView", () => {
 
     expect(view.players[0]?.sourceEntrantId).toBe("p2");
     expect(view.players[1]?.sourceEntrantId).toBe("p1");
+    expect(view.players[1]?.country).toBe("US");
+    expect(view.players[1]?.location).toBe("WA");
     expect(set.entrants[0]).toBe(originalFirst);
     expect(set.entrants[0]?.entrant.id).toBe("p1");
   });
