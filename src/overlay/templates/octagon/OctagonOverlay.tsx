@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import type { OverlayTemplateProps } from "../../types.ts";
+import octagonLogo from "./octagon-logo.png";
 import "./styles.css";
 
 type ScoreAnimationEvent = Extract<
@@ -63,7 +64,7 @@ function runSetEntrance(root: HTMLElement, initial: boolean): Animation[] {
 
   add(
     animateElement(
-      root.querySelector(".player--port"),
+      root.querySelector(".player-port"),
       [
         { opacity: 0, transform: "translateX(-20px)" },
         { opacity: 1, transform: "translateX(0)" },
@@ -73,7 +74,7 @@ function runSetEntrance(root: HTMLElement, initial: boolean): Animation[] {
   );
   add(
     animateElement(
-      root.querySelector(".player--starboard"),
+      root.querySelector(".player-starboard"),
       [
         { opacity: 0, transform: "translateX(20px)" },
         { opacity: 1, transform: "translateX(0)" },
@@ -98,7 +99,7 @@ function runSetEntrance(root: HTMLElement, initial: boolean): Animation[] {
 
   for (const side of ["port", "starboard"]) {
     const chips = Array.from(
-      root.querySelectorAll(`.player--${side} .chip`),
+      root.querySelectorAll(`.player-${side} .chip`),
     ).reverse();
     for (const [index, chip] of chips.entries()) {
       add(
@@ -193,14 +194,14 @@ function Score({
   return (
     <div
       key={event?.sequence ?? "idle"}
-      className={`score score--${side} ${effect === null ? "" : "score--changed"}`}
+      className={`score score-${side} ${effect === null ? "" : "score-changed"}`}
     >
       {effect === null ? null : (
-        <span className="score__effects" key={effect.sequence} aria-hidden="true">
-          <span className="score__ring" />
-          <span className="score__old">{effect.previousScore}</span>
-          <span className="score__particle score__particle--one" />
-          <span className="score__particle score__particle--two" />
+        <span className="score-effects" key={effect.sequence} aria-hidden="true">
+          <span className="score-ring" />
+          <span className="score-old">{effect.previousScore}</span>
+          <span className="score-particle score-particle-one" />
+          <span className="score-particle score-particle-two" />
         </span>
       )}
       <strong>{value ?? "—"}</strong>
@@ -253,7 +254,7 @@ function PlayerPlate({
       <Chip key="location" label="From">
         {flag === null ? null : (
           <span
-            className="chip__flag"
+            className="chip-flag"
             role="img"
             aria-label={`${player.country ?? "Country"} flag`}
           >
@@ -266,9 +267,9 @@ function PlayerPlate({
   ];
 
   return (
-    <section className={`player player--${side}`}>
-      <div className="player__plate">
-        <div className="player__name">
+    <section className={`player player-${side}`}>
+      <div className="player-plate">
+        <div className="player-name">
           {player?.prefix === null || player?.prefix === undefined ? null : (
             <span>{player.prefix}</span>
           )}
@@ -304,24 +305,50 @@ function Helm({
     "--helm-duration": `${String(duration)}ms`,
     "--helm-easing": easing,
   } as CSSProperties;
+
   return (
     <div className="helm-rig">
-      <div className="helm" style={style}>
-        {Array.from({ length: 8 }, (_, index) => (
-          <i
-            className={`helm__bolt ${
-              pulse !== null &&
-              ((pulse.side === "port" && index === 6) ||
-                (pulse.side === "starboard" && index === 2))
-                ? "helm__bolt--pulse"
-                : ""
-            }`}
-            style={{ "--i": index } as CSSProperties}
-            key={`${String(index)}-${pulse?.sequence ?? "idle"}`}
-          />
-        ))}
-        <div className="helm__logo" />
-      </div>
+      <svg
+        className="helm"
+        viewBox="0 0 140 140"
+        style={style}
+        aria-hidden="true"
+      >
+        <g className="helm-wheel">
+          <circle className="helm-ring-outer" cx="70" cy="70" r="79" />
+          <circle className="helm-ring-sand" cx="70" cy="70" r="75" />
+          <circle className="helm-ring-brass" cx="70" cy="70" r="70" />
+          <circle className="helm-ring-deep" cx="70" cy="70" r="63" />
+          <circle className="helm-ring-inner" cx="70" cy="70" r="59" />
+          {Array.from({ length: 8 }, (_, index) => (
+            <rect
+              className={`helm-bolt ${
+                pulse !== null &&
+                ((pulse.side === "port" && index === 6) ||
+                  (pulse.side === "starboard" && index === 2))
+                  ? "helm-bolt-pulse"
+                  : ""
+              }`}
+              x="64.5"
+              y="-9"
+              width="11"
+              height="18"
+              rx="3"
+              transform={`rotate(${String(index * 45)} 70 70)`}
+              key={`${String(index)}-${pulse?.sequence ?? "idle"}`}
+            />
+          ))}
+        </g>
+        <image
+          className="helm-logo"
+          href={octagonLogo}
+          x="21"
+          y="21"
+          width="98"
+          height="98"
+          preserveAspectRatio="xMidYMid meet"
+        />
+      </svg>
     </div>
   );
 }
@@ -352,8 +379,8 @@ function MatchPlate({ view }: { readonly view: OverlayView }): ReactNode {
         fill="none"
         aria-hidden="true"
       >
-        <path className="tentacle__outline" d="M34 2C18 19 26 43 58 47C92 51 104 24 130 24C158 24 171 49 150 56" />
-        <path className="tentacle__fill" d="M34 2C18 19 26 43 58 47C92 51 104 24 130 24C158 24 171 49 150 56" />
+        <path className="tentacle-outline" d="M34 2C18 19 26 43 58 47C92 51 104 24 130 24C158 24 171 49 150 56" />
+        <path className="tentacle-fill" d="M34 2C18 19 26 43 58 47C92 51 104 24 130 24C158 24 171 49 150 56" />
         <g>
           {suckerPositions.map(([x, y]) => (
             <circle key={x} cx={x} cy={y} r="2.5" />

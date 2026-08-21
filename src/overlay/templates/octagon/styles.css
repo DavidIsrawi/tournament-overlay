@@ -10,15 +10,15 @@
   height: 127px;
 }
 
-.player--port {
+.player-port {
   left: 402px;
 }
 
-.player--starboard {
+.player-starboard {
   right: 402px;
 }
 
-.player__plate {
+.player-plate {
   position: relative;
   display: flex;
   align-items: center;
@@ -48,17 +48,17 @@
     0 10px 10px rgba(0, 0, 0, 0.26);
 }
 
-.player--port .player__plate {
+.player-port .player-plate {
   padding: 0 94px 0 22px;
 }
 
-.player--starboard .player__plate {
+.player-starboard .player-plate {
   justify-content: flex-end;
   padding: 0 22px 0 94px;
   border-radius: 30px 10px;
 }
 
-.player__name {
+.player-name {
   display: flex;
   min-width: 0;
   align-items: baseline;
@@ -68,11 +68,11 @@
   text-transform: uppercase;
 }
 
-.player--starboard .player__name {
+.player-starboard .player-name {
   flex-direction: row-reverse;
 }
 
-.player__name span {
+.player-name span {
   flex: 0 0 auto;
   color: var(--purple);
   font-size: 15px;
@@ -80,11 +80,11 @@
   letter-spacing: 1px;
 }
 
-.player--starboard .player__name span {
+.player-starboard .player-name span {
   color: var(--teal);
 }
 
-.player__name strong {
+.player-name strong {
   overflow: hidden;
   font-size: 31px;
   font-weight: 900;
@@ -111,11 +111,11 @@
   transform-origin: center;
 }
 
-.score--port {
+.score-port {
   right: -6px;
 }
 
-.score--starboard {
+.score-starboard {
   left: -6px;
   background: var(--teal);
   border-radius: 28px 10px;
@@ -127,14 +127,14 @@
   font: 900 44px/1 "Arial Black", "Avenir Next", sans-serif;
 }
 
-.score__effects {
+.score-effects {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
 }
 
-.score__ring {
+.score-ring {
   position: absolute;
   inset: -3px;
   z-index: 7;
@@ -143,15 +143,15 @@
   animation: score-ring 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.score--changed {
+.score-changed {
   animation: score-bell 550ms both;
 }
 
-.score--changed > strong {
+.score-changed > strong {
   animation: score-new 350ms 70ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-.score__old {
+.score-old {
   position: absolute;
   inset: 0;
   z-index: 3;
@@ -161,7 +161,7 @@
   animation: score-old 240ms cubic-bezier(0.55, 0, 1, 0.45) both;
 }
 
-.score__particle {
+.score-particle {
   --particle-x: 24px;
   --particle-y: -18px;
   position: absolute;
@@ -177,7 +177,7 @@
   animation: score-particle 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.score__particle--two {
+.score-particle-two {
   --particle-x: -29px;
   --particle-y: -25px;
   animation-delay: 25ms;
@@ -192,12 +192,12 @@
   overflow: hidden;
 }
 
-.player--port .chips {
+.player-port .chips {
   justify-content: flex-end;
   margin-left: 6px;
 }
 
-.player--starboard .chips {
+.player-starboard .chips {
   flex-direction: row-reverse;
   justify-content: flex-end;
   margin-left: 42px;
@@ -232,7 +232,7 @@
   text-transform: uppercase;
 }
 
-.chip__flag {
+.chip-flag {
   flex: 0 0 auto;
   font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
   font-size: 16px;
@@ -240,7 +240,7 @@
   line-height: 1;
 }
 
-.player--starboard .chip b {
+.player-starboard .chip b {
   color: var(--teal);
 }
 
@@ -257,49 +257,53 @@
 .helm {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  background: var(--deep);
-  border: 7px solid var(--brass);
-  border-radius: 50%;
-  box-shadow:
-    inset 0 0 0 4px var(--sand),
-    0 0 0 5px var(--sand),
-    0 0 0 9px var(--deep),
-    0 10px 10px rgba(0, 0, 0, 0.34);
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.helm-wheel {
+  filter:
+    drop-shadow(0 4px 0 rgba(32, 41, 66, 0.45))
+    drop-shadow(0 10px 10px rgba(0, 0, 0, 0.34));
   transform: rotate(var(--helm-turn));
+  transform-box: view-box;
+  transform-origin: center;
   transition:
     transform var(--helm-duration) var(--helm-easing);
 }
 
-.helm__bolt {
-  --angle: calc(var(--i) * 45deg);
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 2;
-  width: 11px;
-  height: 18px;
-  background: var(--brass);
-  border: 3px solid var(--deep);
-  border-radius: 6px;
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.22);
-  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-70px);
+.helm-ring-outer,
+.helm-ring-deep {
+  fill: var(--deep);
 }
 
-.helm__bolt--pulse {
+.helm-ring-sand {
+  fill: var(--sand);
+}
+
+.helm-ring-brass {
+  fill: var(--brass);
+}
+
+.helm-ring-inner {
+  fill: var(--deep);
+  stroke: var(--sand);
+  stroke-width: 4px;
+}
+
+.helm-bolt {
+  fill: var(--brass);
+  stroke: var(--deep);
+  stroke-width: 3px;
+}
+
+.helm-bolt-pulse {
   animation: fitting-pulse 360ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.helm__logo {
-  width: 98px;
-  height: 98px;
-  z-index: 3;
-  background: url("./octagon-logo.png") center / contain no-repeat;
+.helm-logo {
   filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.25));
-  transform: rotate(calc(-1 * var(--helm-turn)));
-  transition:
-    transform var(--helm-duration) var(--helm-easing);
 }
 
 .event-plate {
@@ -414,13 +418,13 @@
   filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.28));
 }
 
-.tentacle__outline {
+.tentacle-outline {
   stroke: var(--deep);
   stroke-linecap: round;
   stroke-width: 17;
 }
 
-.tentacle__fill {
+.tentacle-fill {
   stroke: var(--purple);
   stroke-linecap: round;
   stroke-width: 11;
@@ -527,12 +531,12 @@
 
 @keyframes fitting-pulse {
   from {
-    background: var(--white);
+    fill: var(--white);
     filter: brightness(1.75);
   }
 
   to {
-    background: var(--brass);
+    fill: var(--brass);
     filter: brightness(1);
   }
 }
@@ -548,21 +552,20 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .score--changed {
+  .score-changed {
     animation: score-reduced 180ms ease-out;
   }
 
-  .score--changed > strong,
-  .helm__bolt--pulse {
+  .score-changed > strong,
+  .helm-bolt-pulse {
     animation: none;
   }
 
-  .score__effects {
+  .score-effects {
     display: none;
   }
 
-  .helm,
-  .helm__logo {
+  .helm-wheel {
     transition: none;
   }
 }

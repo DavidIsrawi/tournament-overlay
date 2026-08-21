@@ -11,12 +11,12 @@ function Player({
   readonly side: "port" | "starboard";
 }): ReactNode {
   return (
-    <section className={`minimal-player minimal-player--${side}`}>
-      <div className="minimal-player__identity">
+    <section className={`minimal-player minimal-player-${side}`}>
+      <div className="minimal-player-identity">
         <span>{player?.prefix ?? (side === "port" ? "Player one" : "Player two")}</span>
         <strong>{player?.displayName ?? "TBD"}</strong>
       </div>
-      <div className="minimal-player__score" aria-label="Score">
+      <div className="minimal-player-score" aria-label="Score">
         {player?.score ?? "—"}
       </div>
     </section>

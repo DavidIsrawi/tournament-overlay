@@ -94,11 +94,11 @@
   align-items: stretch;
 }
 
-.minimal-player--starboard {
+.minimal-player-starboard {
   flex-direction: row-reverse;
 }
 
-.minimal-player__identity {
+.minimal-player-identity {
   display: flex;
   min-width: 0;
   flex: 1;
@@ -107,12 +107,12 @@
   padding: 0 24px;
 }
 
-.minimal-player--starboard .minimal-player__identity {
+.minimal-player-starboard .minimal-player-identity {
   align-items: flex-end;
   text-align: right;
 }
 
-.minimal-player__identity span {
+.minimal-player-identity span {
   overflow: hidden;
   color: var(--sand);
   font-size: 11px;
@@ -123,7 +123,7 @@
   white-space: nowrap;
 }
 
-.minimal-player__identity strong {
+.minimal-player-identity strong {
   overflow: hidden;
   font-size: clamp(25px, 2vw, 42px);
   font-weight: 900;
@@ -134,7 +134,7 @@
   white-space: nowrap;
 }
 
-.minimal-player__score {
+.minimal-player-score {
   display: grid;
   width: 92px;
   place-items: center;
@@ -143,7 +143,7 @@
   font-weight: 900;
 }
 
-.minimal-player--starboard .minimal-player__score {
+.minimal-player-starboard .minimal-player-score {
   background: var(--teal);
 }
 
