@@ -1,4 +1,24 @@
-import type { NormalizedSet, ServerState } from "../shared/contracts.ts";
+import type {
+  ConnectionState,
+  NormalizedSet,
+} from "../shared/contracts.ts";
+
+export type SetFilter = "pending" | "completed";
+export type StatusTone = "good" | "warn" | "bad" | "muted";
+
+export interface VisibleRound {
+  readonly name: string;
+  readonly order: number;
+  readonly sets: readonly NormalizedSet[];
+}
+
+export interface ConnectionNotice {
+  readonly canRetry: boolean;
+  readonly message: string;
+  readonly title: string;
+  readonly tone: StatusTone;
+  readonly variant: "error" | "warning";
+}
 
 export function formatTime(value: string | null): string {
   if (value === null) {
@@ -18,15 +38,13 @@ export function overlayUrl(): string {
   return new URL("/overlay/", window.location.origin).toString();
 }
 
-export function entrantLabel(set: NormalizedSet): string {
+function entrantLabel(set: NormalizedSet): string {
   const [left, right] = set.entrants;
   return `${left?.entrant.name ?? "TBD"} vs ${right?.entrant.name ?? "TBD"}`;
 }
 
-export function providerTone(
-  state: ServerState,
-): "good" | "warn" | "bad" | "muted" {
-  switch (state.connection.status) {
+function providerTone(status: ConnectionState["status"]): StatusTone {
+  switch (status) {
     case "fresh":
       return "good";
     case "loading":
@@ -37,4 +55,70 @@ export function providerTone(
     case "idle":
       return "muted";
   }
+}
+
+export function buildVisibleRounds(
+  sets: readonly NormalizedSet[],
+  query: string,
+  filter: SetFilter,
+): readonly VisibleRound[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const byRound = new Map<
+    string,
+    { readonly order: number; sets: NormalizedSet[] }
+  >();
+
+  for (const set of sets) {
+    const matchesQuery =
+      normalizedQuery.length === 0 ||
+      `${set.identifier} ${set.round.name} ${entrantLabel(set)}`
+        .toLowerCase()
+        .includes(normalizedQuery);
+    const matchesFilter =
+      filter === "pending"
+        ? set.state === "pending" || set.state === "active"
+        : set.state === "completed";
+    if (!matchesQuery || !matchesFilter) {
+      continue;
+    }
+
+    const round = byRound.get(set.round.name);
+    if (round === undefined) {
+      byRound.set(set.round.name, {
+        order: set.round.order,
+        sets: [set],
+      });
+    } else {
+      round.sets.push(set);
+    }
+  }
+
+  return [...byRound.entries()]
+    .map(([name, round]) => ({ name, ...round }))
+    .sort((left, right) => left.order - right.order);
+}
+
+export function connectionNotice(
+  connection: ConnectionState,
+  socketError: string | null,
+): ConnectionNotice | null {
+  const message = connection.message ?? socketError;
+  if (message === null) {
+    return null;
+  }
+
+  const title =
+    connection.status === "error"
+      ? "Provider needs attention"
+      : connection.status === "loading"
+        ? "Loading tournament data"
+        : "Showing last known tournament data";
+
+  return {
+    canRetry: connection.status !== "loading",
+    message,
+    title,
+    tone: providerTone(connection.status),
+    variant: connection.status === "error" ? "error" : "warning",
+  };
 }

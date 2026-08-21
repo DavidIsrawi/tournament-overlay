@@ -1,5 +1,7 @@
 import type { OverlayView } from "./contracts.ts";
 
+export type OverlaySide = "port" | "starboard";
+
 export type OverlayAnimationEvent =
   | {
       readonly sequence: number;
@@ -9,10 +11,15 @@ export type OverlayAnimationEvent =
   | {
       readonly sequence: number;
       readonly type: "score.changed";
-      readonly side: "port" | "starboard";
+      readonly side: OverlaySide;
       readonly previousScore: number;
       readonly score: number;
     };
+
+export type ScoreAnimationEvent = Extract<
+  OverlayAnimationEvent,
+  { readonly type: "score.changed" }
+>;
 
 export function deriveOverlayAnimationEvents(
   previous: OverlayView | null,

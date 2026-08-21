@@ -1,4 +1,6 @@
 import type { OverlayPlayer } from "../../../shared/contracts.ts";
+import type { OverlaySide } from "../../../shared/overlay-events.ts";
+import { overlayFreshnessLabel } from "../../helpers.ts";
 import type { ReactNode } from "react";
 import type { OverlayTemplateProps } from "../../types.ts";
 import "./styles.css";
@@ -8,7 +10,7 @@ function Player({
   side,
 }: {
   readonly player: OverlayPlayer | null;
-  readonly side: "port" | "starboard";
+  readonly side: OverlaySide;
 }): ReactNode {
   return (
     <section className={`minimal-player minimal-player-${side}`}>
@@ -27,8 +29,7 @@ export default function MinimalOverlay({
   view,
   connected,
 }: OverlayTemplateProps): ReactNode {
-  const freshnessVisible =
-    !connected || view.status === "stale" || view.status === "error";
+  const freshness = overlayFreshnessLabel(connected, view.status);
 
   return (
     <div className="minimal-template" key={view.setId ?? "empty"}>
@@ -46,10 +47,10 @@ export default function MinimalOverlay({
         <Player player={view.players[1]} side="starboard" />
       </div>
 
-      {freshnessVisible && (
+      {freshness !== null && (
         <div className="minimal-freshness">
           <span aria-hidden="true" />
-          {!connected ? "Server reconnecting" : "Tournament data stale"}
+          {freshness}
         </div>
       )}
     </div>
