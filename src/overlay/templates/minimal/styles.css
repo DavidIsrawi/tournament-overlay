@@ -53,7 +53,7 @@
   left: 50%;
   display: grid;
   width: 1320px;
-  height: 92px;
+  height: 72px;
   grid-template-columns: minmax(0, 1fr) 250px minmax(0, 1fr);
   color: var(--white);
   background: var(--deep);
@@ -70,7 +70,7 @@
   position: absolute;
   top: -3px;
   width: 18px;
-  height: 92px;
+  height: 72px;
   content: "";
   background: var(--deep);
   border-top: 3px solid var(--brass);
@@ -102,17 +102,21 @@
   display: flex;
   min-width: 0;
   flex: 1;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 0 24px;
+  gap: 12px;
+  overflow: hidden;
+  padding: 0 22px;
 }
 
 .minimal-player-starboard .minimal-player-identity {
-  align-items: flex-end;
+  flex-direction: row-reverse;
   text-align: right;
 }
 
 .minimal-player-identity span {
+  max-width: 30%;
+  flex: 0 1 auto;
   overflow: hidden;
   color: var(--sand);
   font-size: 11px;
@@ -124,6 +128,8 @@
 }
 
 .minimal-player-identity strong {
+  min-width: 0;
+  flex: 0 1 auto;
   overflow: hidden;
   font-size: clamp(25px, 2vw, 42px);
   font-weight: 900;
@@ -136,7 +142,7 @@
 
 .minimal-player-score {
   display: grid;
-  width: 92px;
+  width: 80px;
   place-items: center;
   background: var(--purple);
   font-size: 42px;
@@ -187,7 +193,7 @@
 
 .minimal-freshness {
   position: absolute;
-  top: 180px;
+  top: 160px;
   left: 50%;
   display: flex;
   align-items: center;
