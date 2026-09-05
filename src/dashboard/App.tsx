@@ -18,11 +18,15 @@ function StatusDot({ tone }: { readonly tone: StatusTone }): ReactNode {
 }
 
 export function App(): ReactNode {
-  const { state, socketStatus, error, sendCommand } =
+  const { state, socketStatus, error, sendCommand, pendingCommands, dismissError } =
     useTournamentSocket("dashboard");
-  const [providerId, setProviderId] = useState("startgg");
-  const [eventInput, setEventInput] = useState("");
+  const [providerInput, setProviderId] = useState<string | null>(null);
+  const [eventDraft, setEventInput] = useState<string | null>(null);
   const [showTokenSetup, setShowTokenSetup] = useState(false);
+  const providerId = providerInput ?? state?.operator.providerId ?? "startgg";
+  const eventInput = eventDraft ?? state?.operator.eventInput ?? "";
+  const connected = socketStatus === "connected";
+  const pending = (type: string): boolean => pendingCommands.some((command) => command.type === type);
 
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -55,7 +59,7 @@ export function App(): ReactNode {
     );
   }
 
-  const notice = connectionNotice(state.connection, error);
+  const notice = connectionNotice(state.connection, null);
 
   return (
     <div className="app-shell">
@@ -95,9 +99,9 @@ export function App(): ReactNode {
           <button
             className="button button--load"
             type="submit"
-            disabled={state.connection.status === "loading"}
+            disabled={!connected || pending("event.load")}
           >
-            {state.connection.status === "loading" ? "Loading…" : "Load event"}
+            {pending("event.load") ? "Loading…" : "Load event"}
           </button>
         </form>
 
@@ -110,8 +114,8 @@ export function App(): ReactNode {
               </strong>
               <small>
                 {state.connection.status === "fresh"
-                  ? `Fresh at ${formatTime(state.connection.lastUpdatedAt)}`
-                  : state.connection.status}
+                  ? `Bracket updated ${formatTime(state.connection.lastUpdatedAt)}`
+                  : `Bracket ${state.connection.status}`}
               </small>
             </span>
           </div>
@@ -125,6 +129,16 @@ export function App(): ReactNode {
         </div>
       </header>
 
+      {error !== null && (
+        <div className="notice notice--error" role="alert">
+          <StatusDot tone="bad" />
+          <span><strong>Action needs attention</strong><small>{error}</small></span>
+          <button className="button button--small" type="button" onClick={dismissError}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {notice !== null && (
         <div className={`notice notice--${notice.variant}`} role="status">
           <StatusDot tone={notice.tone} />
@@ -136,6 +150,7 @@ export function App(): ReactNode {
             <button
               className="button button--small"
               type="button"
+              disabled={!connected || pending("refresh")}
               onClick={() => sendCommand({ type: "refresh" })}
             >
               Try again
@@ -151,6 +166,7 @@ export function App(): ReactNode {
             <button
               type="button"
               key={group.id}
+              disabled={!connected || (pending("phase.select") && group.id === state.operator.selectedPhaseGroupId)}
               aria-current={
                 group.id === state.operator.selectedPhaseGroupId
                   ? "page"
@@ -171,16 +187,16 @@ export function App(): ReactNode {
         <button
           className="button button--refresh"
           type="button"
-          disabled={state.connection.status === "loading"}
+          disabled={!connected || pending("refresh")}
           onClick={() => sendCommand({ type: "refresh" })}
         >
-          {state.connection.status === "loading" ? "Loading…" : "Refresh data"}
+          {pending("refresh") ? "Refreshing…" : "Refresh data"}
         </button>
       </nav>
 
       <div className="workspace">
-        <BracketWorkspace state={state} send={sendCommand} />
-        <SceneRail state={state} send={sendCommand} />
+        <BracketWorkspace state={state} send={sendCommand} disabled={!connected || pending("set.select")} />
+        <SceneRail state={state} send={sendCommand} connected={connected} pendingCommands={pendingCommands} />
       </div>
     </div>
   );

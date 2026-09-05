@@ -54,6 +54,7 @@ const event: NormalizedEvent = {
       name: "Top 8",
       phaseName: "Top 8",
       setsLoaded: true,
+      setsFetchedAt: "2026-08-19T00:00:00.000Z",
       sets: [set],
     },
   ],
@@ -89,5 +90,22 @@ describe("deriveOverlayView", () => {
     });
 
     expect(parsed.presentation.overlayTemplateId).toBe("octagon");
+  });
+
+  it("migrates legacy live selections but preserves an explicit empty live scene", () => {
+    const legacy = {
+      providerId: "startgg",
+      eventInput: "tournament/example/event/singles",
+      selectedPhaseGroupId: "group-1",
+      selectedSetId: "set-1",
+      presentation: { sideOrder: "normal" },
+    };
+    expect(operatorStateSchema.parse(legacy).liveSelection).toEqual({
+      providerId: "startgg",
+      eventInput: legacy.eventInput,
+      phaseGroupId: "group-1",
+      setId: "set-1",
+    });
+    expect(operatorStateSchema.parse({ ...legacy, liveSelection: null }).liveSelection).toBeNull();
   });
 });

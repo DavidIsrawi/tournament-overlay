@@ -20,7 +20,7 @@ One normalized scene powers both an information-dense operator surface and a bro
 
 ## Operating Context
 
-The server, dashboard, and OBS browser source run on one operator machine. Operators browse phase groups and rounds, select a set, monitor freshness, adjust presentation side order, and leave the overlay URL open in OBS.
+The server, dashboard, and OBS browser source run on one operator machine. Operators browse phase groups and rounds, preview a set, explicitly take it live, monitor bracket and live-set freshness independently, adjust presentation side order, and leave the overlay URL open in OBS. Browsing never replaces the on-air set.
 
 ## Capabilities and Constraints
 

@@ -26,6 +26,12 @@ Open:
    development, you can instead copy `.env.example` to `.env` and set
    `STARTGG_API_TOKEN`.
 4. In the dashboard, choose **StartGG**, enter an event URL or slug, and load it.
+5. Select a set to preview, then press **Take live** to put it on air.
+
+Browsing sets, phases, or another event never replaces the live scoreboard.
+**Take live** fetches the latest set details before switching; a failed fetch
+leaves the previous scene on air. Side swaps and overlay-design changes apply
+to the live output immediately.
 
 The setup screen stores the token in the current user's local configuration
 directory with owner-only file permissions. It is read only by the server and
@@ -122,14 +128,19 @@ src/
 
 The server is the single authority. A provider returns normalized immutable source data. Local `PresentationState` separately records selected sides and safe overrides. `deriveOverlayView` combines them into the stable provider-neutral contract broadcast to both clients. Swapping sides therefore cannot mutate entrant or set data.
 
-Operator choices are persisted atomically to `.data/operator-state.json` with a temporary-file write and rename. The file contains provider/event/phase/set and presentation choices only; it never contains credentials.
+Operator choices are persisted atomically to `operator-state.json` in the
+current user's configuration directory, or the path specified by `STATE_FILE`.
+The file contains separate preview and live provider/event/phase/set selections
+and presentation choices only; it never contains credentials. Both selections
+restore independently after restart. Older saved selections migrate to the live
+scene they represented before preview/live separation.
 
 ### Live protocol
 
 Clients connect to `/ws` and identify themselves:
 
 ```json
-{"type":"client.hello","protocolVersion":3,"client":"dashboard"}
+{"type":"client.hello","protocolVersion":5,"client":"dashboard"}
 ```
 
 The server answers with the complete current state:
@@ -148,7 +159,20 @@ Dashboard commands are correlated:
 }
 ```
 
-The server responds with `command.ack` or `command.error`, then broadcasts a fresh `state.snapshot` when state changes. All messages are validated against the shared Zod contracts. Reconnect uses bounded exponential delay and always resynchronizes from a full snapshot.
+The server broadcasts `state.snapshot` when state changes and responds with
+`command.ack` after a command completes, including persistence, or a correlated
+`command.error` on failure. An acknowledgment is not merely receipt of a command;
+a failed or superseded provider load is not acknowledged as successful. Recent
+command IDs are deduplicated within a connection. The dashboard tracks pending
+commands and never automatically replays them after disconnect, since the
+operation may already have changed the live scene.
+
+`set.select` changes only the preview. To broadcast it, send
+`{"type":"live.take","eventId":"<current-event-id>","setId":"<preview-set-id>"}`.
+The state carries separate `connection` (bracket) and `liveConnection`
+(broadcast set) freshness. All messages are validated against the shared Zod
+contracts. Reconnect uses bounded exponential delay and always resynchronizes
+from a full snapshot.
 
 ## Polling and rate limits
 
@@ -156,10 +180,18 @@ The server responds with `command.ack` or `command.error`, then broadcasts a fre
 - Phase-group pages are requested sequentially through a shared one-request-per-second limiter.
 - Rate-limit responses honor `Retry-After` and otherwise use bounded exponential backoff.
 - List queries fetch lightweight entrant data; full profiles load only for the selected set.
-- Only the selected set is polled, once centrally by the server.
+- Only the live set is polled, once centrally by the server, independently of
+  bracket navigation or failed refreshes.
 - The default interval is 15 seconds (`POLL_INTERVAL_MS`).
+- The visible phase group refreshes every 60 seconds. Cached groups carry their
+  own `setsFetchedAt` timestamp and are reloaded on return once expired. Live-set
+  polls do not advance bracket freshness.
+- Transient bracket-load and live-set failures retry automatically; invalid
+  input, missing credentials, and missing resources require operator action.
 - Provider failures use bounded exponential backoff, capped at 120 seconds.
 - Connection state distinguishes idle, loading, fresh, stale, and error, with the last successful update exposed to clients.
+- Event metadata paginates phase groups as well as sets. Multi-participant
+  entrants retain their team name instead of taking the first player's identity.
 
 This keeps StartGG request volume independent of dashboard or overlay client count. Operators should still choose an interval appropriate for their event and StartGG allowance.
 

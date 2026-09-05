@@ -548,6 +548,8 @@ select:focus-visible {
   position: sticky;
   top: 92px;
   min-height: calc(100vh - 92px);
+  max-height: calc(100vh - 92px);
+  overflow-y: auto;
   padding: 24px 22px;
   color: #fff;
   background:
@@ -644,6 +646,14 @@ select:focus-visible {
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.scene-player--no-prefix {
+  grid-template-columns: minmax(0, 1fr) 36px;
+}
+
+.scene-player--no-prefix > span {
+  display: none;
 }
 
 .scene-player b {
@@ -1011,6 +1021,8 @@ select:focus-visible {
   .scene {
     position: static;
     min-height: 0;
+    max-height: none;
+    overflow-y: visible;
     border-top: 1px solid var(--brass);
     border-left: 0;
   }
@@ -1026,10 +1038,6 @@ select:focus-visible {
 
   .brand {
     flex: 1;
-  }
-
-  .health small {
-    display: none;
   }
 
   .command__status {
@@ -1094,4 +1102,26 @@ select:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+
+}
+
+.scene-preview {
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--brass);
+}
+
+.scene-preview > .button {
+  width: 100%;
+}
+
+.scene-preview > p,
+.scene__freshness {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.scene-preview > p,
+.scene > p {
+  margin-top: 8px;
 }

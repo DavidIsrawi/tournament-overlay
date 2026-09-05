@@ -24,12 +24,14 @@ function makeState(revision: number): ServerState {
       eventInput: "genesis-9/event/melee-singles",
       selectedPhaseGroupId: null,
       selectedSetId: null,
+      liveSelection: null,
       presentation: {
         sideOrder: "normal",
         overlayTemplateId: "octagon",
       },
     },
     connection,
+    liveConnection: connection,
     event: null,
     overlay: deriveOverlayView(
       revision,

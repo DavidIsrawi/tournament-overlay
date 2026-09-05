@@ -91,6 +91,7 @@ function makeEvent(): NormalizedEvent {
         name: "A1",
         phaseName: "Pools",
         setsLoaded: false,
+        setsFetchedAt: null,
         sets: [],
       },
       {
@@ -98,6 +99,7 @@ function makeEvent(): NormalizedEvent {
         name: "A2",
         phaseName: "Pools",
         setsLoaded: false,
+        setsFetchedAt: null,
         sets: [],
       },
     ],
@@ -225,6 +227,7 @@ describe("TournamentService", () => {
       false,
     );
 
+    await service.dispatch({ type: "live.take", eventId: "event-1", setId: "set-1" });
     const refresh = service.loadEvent(
       "startgg",
       "tournament/octagon/event/ultimate",
@@ -380,6 +383,7 @@ describe("TournamentService", () => {
       "tournament/octagon/event/ultimate",
       false,
     );
+    const supersededLoad = expect(initialLoad).rejects.toMatchObject({ name: "AbortError" });
     await firstPageLoaded;
     expect(service.getState().event?.phaseGroups[0]).toMatchObject({
       setsLoaded: false,
@@ -390,7 +394,7 @@ describe("TournamentService", () => {
       type: "phase.select",
       phaseGroupId: "group-2",
     });
-    await initialLoad;
+    await supersededLoad;
 
     expect(service.getState()).toMatchObject({
       connection: { status: "fresh" },
@@ -415,6 +419,9 @@ describe("TournamentService", () => {
         Promise.resolve([makeSet("set-1", phaseGroupId)]),
       loadSet(_setId, _event, options) {
         pollCount += 1;
+        if (pollCount === 1) {
+          return Promise.resolve(makeSet("set-1", "group-1"));
+        }
         markPollStarted?.();
         return new Promise((_resolve, reject) => {
           options?.signal?.addEventListener(
@@ -439,12 +446,13 @@ describe("TournamentService", () => {
       "tournament/octagon/event/ultimate",
       false,
     );
+    await service.dispatch({ type: "live.take", eventId: "event-1", setId: "set-1" });
     await pollStarted;
 
     service.close();
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(pollCount).toBe(1);
+    expect(pollCount).toBe(2);
   });
 
   it("publishes provider configuration changes", async () => {

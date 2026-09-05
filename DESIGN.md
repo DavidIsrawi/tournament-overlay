@@ -193,6 +193,11 @@ The signature shape is a fitted plate with opposing asymmetric corners: usually 
 
 - **Set cards:** warm paper, subtle fleck material, left state rail, and asymmetric corners. Selected cards add a purple outline; completed cards use teal on the state rail.
 - **Scene rail:** Raised Navy with a restrained diagonal fabric/paint texture.
+- **Preview and live scene:** The rail separates the preview from the on-air
+  scene with a brass rule. A full-width Chart Sand **Take live** action fetches
+  current set data before replacing the broadcast. Set-card selection only
+  updates the preview; an **On air** label identifies the live set. Bracket
+  and live-set freshness are shown separately, including on narrow screens.
 - **Round headers:** Deep Navy bars with compact labels and Chart Sand counts.
 
 ## Do's and Don'ts

@@ -72,6 +72,21 @@ const rawSetSchema = z.object({
   slots: z.array(slotSchema.nullable()).nullable().optional(),
 });
 
+const phaseGroupSchema = z.object({
+  id: idSchema,
+  displayIdentifier: z.string().nullable().optional(),
+  sets: z
+    .object({
+      nodes: z.array(rawSetSchema.nullable()).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+});
+
+const phaseGroupsSchema = z.object({
+  nodes: z.array(phaseGroupSchema.nullable()).nullable().optional(),
+});
+
 const eventResponseSchema = z.object({
   event: z
     .object({
@@ -84,31 +99,7 @@ const eventResponseSchema = z.object({
           z
             .object({
               name: z.string(),
-              phaseGroups: z
-                .object({
-                  nodes: z
-                    .array(
-                      z
-                        .object({
-                          id: idSchema,
-                          displayIdentifier: z.string().nullable().optional(),
-                          sets: z
-                            .object({
-                              nodes: z
-                                .array(rawSetSchema.nullable())
-                                .nullable()
-                                .optional(),
-                            })
-                            .nullable()
-                            .optional(),
-                        })
-                        .nullable(),
-                    )
-                    .nullable()
-                    .optional(),
-                })
-                .nullable()
-                .optional(),
+              phaseGroups: phaseGroupsSchema.nullable().optional(),
             })
             .nullable(),
         )
@@ -118,12 +109,38 @@ const eventResponseSchema = z.object({
     .nullable(),
 });
 
+const metadataPhaseGroupsSchema = phaseGroupsSchema.extend({
+  nodes: z.array(phaseGroupSchema.nullable()).nullable(),
+  pageInfo: z.object({
+    totalPages: z.number().int().nonnegative(),
+  }),
+});
+
+const metadataPhaseSchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  phaseGroups: metadataPhaseGroupsSchema.nullable(),
+});
+
+const eventMetadataResponseSchema = eventResponseSchema.extend({
+  event: eventResponseSchema.shape.event.unwrap().extend({
+    phases: z.array(metadataPhaseSchema.nullable()).nullable().optional(),
+  }).nullable(),
+});
+
+const phaseGroupsResponseSchema = z.object({
+  phase: z.object({
+    id: idSchema,
+    phaseGroups: metadataPhaseGroupsSchema.nullable(),
+  }).nullable(),
+});
+
 const setResponseSchema = z.object({
   set: rawSetSchema.nullable(),
 });
 
 const EVENT_METADATA_QUERY = gql`
-  query TournamentOverlayEventMetadata($slug: String!) {
+  query TournamentOverlayEventMetadata($slug: String!, $perPage: Int!) {
     event(slug: $slug) {
       id
       name
@@ -132,12 +149,33 @@ const EVENT_METADATA_QUERY = gql`
         name
       }
       phases {
+        id
         name
-        phaseGroups(query: { perPage: 50 }) {
+        phaseGroups(query: { page: 1, perPage: $perPage }) {
+          pageInfo {
+            totalPages
+          }
           nodes {
             id
             displayIdentifier
           }
+        }
+      }
+    }
+  }
+`;
+
+const PHASE_GROUPS_QUERY = gql`
+  query TournamentOverlayPhaseGroups($id: ID!, $page: Int!, $perPage: Int!) {
+    phase(id: $id) {
+      id
+      phaseGroups(query: { page: $page, perPage: $perPage }) {
+        pageInfo {
+          totalPages
+        }
+        nodes {
+          id
+          displayIdentifier
         }
       }
     }
@@ -237,6 +275,7 @@ const phaseGroupSetsResponseSchema = z.object({
     .nullable(),
 });
 
+const PHASE_GROUPS_PER_PAGE = 50;
 const SETS_PER_PAGE = 20;
 const DEFAULT_REQUEST_INTERVAL_MS = 1_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 45_000;
@@ -355,7 +394,8 @@ export function parseStartGgEventInput(input: string): string {
 function normalizeEntrant(
   entrant: z.infer<typeof entrantSchema>,
 ): EntrantProfile {
-  const participant = entrant.participants?.[0];
+  const participant =
+    entrant.participants?.length === 1 ? entrant.participants[0] : undefined;
   const location = participant?.user?.location;
   return {
     id: entrant.id,
@@ -448,6 +488,8 @@ export function normalizeStartGgEvent(
           name: group.displayIdentifier ?? phase.name,
           phaseName: phase.name,
           setsLoaded: group.sets !== null && group.sets !== undefined,
+          setsFetchedAt:
+            group.sets !== null && group.sets !== undefined ? fetchedAt : null,
           sets: (group.sets?.nodes ?? []).flatMap((set) =>
             set === null ? [] : [normalizeSet(set, group.id, phase.name)],
           ),
@@ -508,10 +550,66 @@ export class StartGgProvider implements TournamentDataProvider {
     const slug = parseStartGgEventInput(input);
     const response = await this.#request(
       EVENT_METADATA_QUERY,
-      { slug },
+      { slug, perPage: PHASE_GROUPS_PER_PAGE },
       options.signal,
     );
-    return normalizeStartGgEvent(response);
+    const parsed = eventMetadataResponseSchema.safeParse(response);
+    if (!parsed.success) {
+      throw new ProviderError(
+        "invalid_response",
+        "StartGG returned tournament data in an unexpected shape.",
+        { cause: parsed.error },
+      );
+    }
+
+    for (const phase of parsed.data.event?.phases ?? []) {
+      if (phase === null || phase.phaseGroups === null) {
+        continue;
+      }
+
+      const groups = new Map(
+        (phase.phaseGroups.nodes ?? []).flatMap((group) =>
+          group === null ? [] : [[group.id, group] as const],
+        ),
+      );
+      let totalPages = phase.phaseGroups.pageInfo.totalPages;
+      for (let page = 2; page <= totalPages; page += 1) {
+        const pageResponse = await this.#request(
+          PHASE_GROUPS_QUERY,
+          { id: phase.id, page, perPage: PHASE_GROUPS_PER_PAGE },
+          options.signal,
+        );
+        const parsedPage = phaseGroupsResponseSchema.safeParse(pageResponse);
+        if (!parsedPage.success) {
+          throw new ProviderError(
+            "invalid_response",
+            "StartGG returned phase groups in an unexpected shape.",
+            { cause: parsedPage.error },
+          );
+        }
+        if (
+          parsedPage.data.phase?.id !== phase.id ||
+          parsedPage.data.phase.phaseGroups === null
+        ) {
+          throw new ProviderError(
+            "invalid_response",
+            `StartGG could not load the remaining groups for phase "${phase.id}".`,
+          );
+        }
+
+        const connection = parsedPage.data.phase.phaseGroups;
+        totalPages = connection.pageInfo.totalPages;
+        for (const group of connection.nodes ?? []) {
+          if (group !== null) {
+            groups.set(group.id, group);
+          }
+        }
+      }
+      phase.phaseGroups.nodes = [...groups.values()];
+    }
+
+    options.signal?.throwIfAborted();
+    return normalizeStartGgEvent(parsed.data);
   }
 
   public async loadPhaseGroupSets(
