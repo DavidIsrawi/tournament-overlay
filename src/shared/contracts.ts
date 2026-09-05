@@ -5,7 +5,7 @@ import {
   type OverlayTemplateId,
 } from "./overlay-templates.ts";
 
-export const PROTOCOL_VERSION = 4 as const;
+export const PROTOCOL_VERSION = 5 as const;
 
 export type ProviderId = "startgg" | (string & {});
 
@@ -52,6 +52,7 @@ export interface NormalizedPhaseGroup {
   readonly name: string;
   readonly phaseName: string;
   readonly setsLoaded: boolean;
+  readonly setsFetchedAt: string | null;
   readonly sets: readonly NormalizedSet[];
 }
 
@@ -75,7 +76,15 @@ export interface OperatorState {
   readonly eventInput: string;
   readonly selectedPhaseGroupId: string | null;
   readonly selectedSetId: string | null;
+  readonly liveSelection: LiveSelection | null;
   readonly presentation: PresentationState;
+}
+
+export interface LiveSelection {
+  readonly providerId: ProviderId;
+  readonly eventInput: string;
+  readonly phaseGroupId: string;
+  readonly setId: string;
 }
 
 export interface OverlayPlayer {
@@ -123,6 +132,7 @@ export interface ServerState {
   readonly providers: readonly ProviderDescriptor[];
   readonly operator: OperatorState;
   readonly connection: ConnectionState;
+  readonly liveConnection: ConnectionState;
   readonly event: NormalizedEvent | null;
   readonly overlay: OverlayView;
 }
@@ -134,13 +144,36 @@ export const presentationStateSchema = z.object({
     .default(DEFAULT_OVERLAY_TEMPLATE_ID),
 });
 
+const liveSelectionSchema = z.object({
+  providerId: z.string().min(1),
+  eventInput: z.string().min(1),
+  phaseGroupId: z.string().min(1),
+  setId: z.string().min(1),
+});
+
 export const operatorStateSchema = z.object({
   providerId: z.string().min(1),
   eventInput: z.string(),
   selectedPhaseGroupId: z.string().nullable(),
   selectedSetId: z.string().nullable(),
+  liveSelection: liveSelectionSchema.nullable().optional(),
   presentation: presentationStateSchema,
-});
+}).transform((operator): OperatorState => ({
+  ...operator,
+  // Before preview/live separation, the selected set was the broadcast scene.
+  liveSelection: operator.liveSelection === undefined
+    ? operator.selectedSetId !== null &&
+      operator.selectedPhaseGroupId !== null &&
+      operator.eventInput.trim().length > 0
+      ? {
+          providerId: operator.providerId,
+          eventInput: operator.eventInput,
+          phaseGroupId: operator.selectedPhaseGroupId,
+          setId: operator.selectedSetId,
+        }
+      : null
+    : operator.liveSelection,
+}));
 
 const eventLoadCommandSchema = z.object({
   type: z.literal("event.load"),
@@ -155,6 +188,12 @@ const phaseSelectCommandSchema = z.object({
 
 const setSelectCommandSchema = z.object({
   type: z.literal("set.select"),
+  setId: z.string().min(1),
+});
+
+const takeLiveCommandSchema = z.object({
+  type: z.literal("live.take"),
+  eventId: z.string().min(1),
   setId: z.string().min(1),
 });
 
@@ -179,6 +218,7 @@ export const clientCommandSchema = z.discriminatedUnion("type", [
   eventLoadCommandSchema,
   phaseSelectCommandSchema,
   setSelectCommandSchema,
+  takeLiveCommandSchema,
   presentationSwapCommandSchema,
   presentationClearCommandSchema,
   overlaySelectCommandSchema,
@@ -272,6 +312,7 @@ const normalizedEventSchema = z.object({
       name: z.string(),
       phaseName: z.string(),
       setsLoaded: z.boolean(),
+      setsFetchedAt: z.string().nullable(),
       sets: z.array(normalizedSetSchema),
     }),
   ),
@@ -326,6 +367,7 @@ export const serverStateSchema = z.object({
   ),
   operator: operatorStateSchema,
   connection: connectionStateSchema,
+  liveConnection: connectionStateSchema,
   event: normalizedEventSchema.nullable(),
   overlay: overlayViewSchema,
 });

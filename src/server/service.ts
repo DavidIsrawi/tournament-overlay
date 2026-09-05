@@ -19,12 +19,16 @@ import {
 } from "../providers/index.ts";
 import type { AtomicOperatorStateStore } from "./persistence.ts";
 import { StateHub, type StateListener } from "./state-hub.ts";
+import { canRetry, IDLE_CONNECTION, LiveScene, requestMessage, retryDelay } from "./live-scene.ts";
+
+export const BRACKET_REFRESH_INTERVAL_MS = 60_000;
 
 const DEFAULT_OPERATOR_STATE: OperatorState = {
   providerId: "startgg",
   eventInput: "",
   selectedPhaseGroupId: null,
   selectedSetId: null,
+  liveSelection: null,
   presentation: {
     sideOrder: "normal",
     overlayTemplateId: "octagon",
@@ -33,6 +37,9 @@ const DEFAULT_OPERATOR_STATE: OperatorState = {
 
 export class TournamentService {
   readonly #hub: StateHub;
+  readonly #live: LiveScene;
+  #liveEvent: NormalizedEvent | null = null;
+  #liveSet: NormalizedSet | null = null;
   #saveQueue: Promise<void> = Promise.resolve();
   #operatorReady: Promise<void> = Promise.resolve();
   #pollTimer: NodeJS.Timeout | null = null;
@@ -44,6 +51,7 @@ export class TournamentService {
     private readonly providers: ProviderRegistry,
     private readonly store: AtomicOperatorStateStore,
     private readonly pollIntervalMs: number,
+    private readonly bracketRefreshIntervalMs = BRACKET_REFRESH_INTERVAL_MS,
   ) {
     const connection: ConnectionState = {
       status: "idle",
@@ -59,6 +67,7 @@ export class TournamentService {
       providers: providers.list(),
       operator: DEFAULT_OPERATOR_STATE,
       connection,
+      liveConnection: IDLE_CONNECTION,
       event: null,
       overlay: deriveOverlayView(
         0,
@@ -67,6 +76,21 @@ export class TournamentService {
         DEFAULT_OPERATOR_STATE.presentation,
         connection.status,
       ),
+    });
+    this.#live = new LiveScene(providers, pollIntervalMs, (scene) => {
+      this.#liveEvent = scene.event;
+      this.#liveSet = scene.set;
+      const current = this.getState();
+      const event = scene.set !== null && current.event !== null &&
+        current.event?.id === scene.event?.id &&
+        current.event?.providerId === scene.event?.providerId
+        ? this.#replaceSet(current.event, scene.set)
+        : current.event;
+      this.#commit({
+        event,
+        operator: { ...current.operator, liveSelection: scene.selection },
+        liveConnection: scene.connection,
+      });
     });
   }
 
@@ -86,6 +110,7 @@ export class TournamentService {
     this.#cancelPoll();
     this.#abortActiveRequest();
     this.providers.replace(provider);
+    this.#live.refresh();
     const current = this.getState();
     this.#commit({
       providers: this.providers.list(),
@@ -109,13 +134,17 @@ export class TournamentService {
       () => undefined,
     );
     return restore.then(async (operator) => {
-      if (
-        operator !== null &&
-        operator.eventInput.trim().length > 0 &&
-        !this.#closed
-      ) {
-        await this.loadEvent(operator.providerId, operator.eventInput, true);
+      if (operator === null || this.#closed) {
+        return;
       }
+      await Promise.all([
+        operator.eventInput.trim().length > 0
+          ? this.loadEvent(operator.providerId, operator.eventInput, true)
+          : Promise.resolve(),
+        operator.liveSelection === null
+          ? Promise.resolve()
+          : this.#live.restore(operator.liveSelection),
+      ]);
     });
   }
 
@@ -155,6 +184,16 @@ export class TournamentService {
       case "set.select":
         await this.#selectSet(command.setId);
         break;
+      case "live.take": {
+        const event = this.getState().event;
+        if (event === null || event.id !== command.eventId ||
+            findSet(event, command.setId) === null) {
+          throw new ProviderError("set_not_found", "The preview set is no longer available. Select it again.");
+        }
+        await this.#live.take(event, command.setId);
+        await this.#saveOperator(this.getState().operator);
+        break;
+      }
       case "presentation.swap":
         await this.#updatePresentation(
           this.getState().operator.presentation.sideOrder === "normal"
@@ -169,6 +208,7 @@ export class TournamentService {
         await this.#selectOverlayTemplate(command.templateId);
         break;
       case "refresh":
+        this.#live.refresh();
         await this.loadEvent(
           this.getState().operator.providerId,
           this.getState().operator.eventInput,
@@ -186,6 +226,7 @@ export class TournamentService {
     this.#pollGeneration += 1;
     this.#cancelPoll();
     this.#abortActiveRequest();
+    this.#live.close();
   }
 
   public async loadEvent(
@@ -194,13 +235,14 @@ export class TournamentService {
     preserveSelection: boolean,
   ): Promise<void> {
     if (this.#closed) {
-      return;
+      throw new Error("Tournament service is closed.");
     }
     const generation = ++this.#pollGeneration;
     this.#cancelPoll();
     const controller = this.#beginRequest();
     const previous = this.getState();
     const loadingOperator: OperatorState = {
+      ...previous.operator,
       providerId,
       eventInput: input.trim(),
       selectedPhaseGroupId: preserveSelection
@@ -215,7 +257,7 @@ export class TournamentService {
       operator: loadingOperator,
       event: preserveSelection ? previous.event : null,
       connection: {
-        ...previous.connection,
+        ...(preserveSelection ? previous.connection : IDLE_CONNECTION),
         status: "loading",
         message: "Loading event metadata…",
         nextPollAt: null,
@@ -228,7 +270,7 @@ export class TournamentService {
         signal: controller.signal,
       });
       if (generation !== this.#pollGeneration) {
-        return;
+        throw new DOMException("The request was superseded.", "AbortError");
       }
       let event = this.#mergeCachedPhaseGroups(
         metadata,
@@ -274,7 +316,7 @@ export class TournamentService {
         );
       }
       if (generation !== this.#pollGeneration) {
-        return;
+        throw new DOMException("The request was superseded.", "AbortError");
       }
 
       const selectedSetId = this.#resolveSetSelection(
@@ -297,17 +339,17 @@ export class TournamentService {
           status: "fresh",
           message: null,
           lastUpdatedAt: now,
-          nextPollAt: selectedSetId === null ? null : this.#nextPollAt(0),
+          nextPollAt: selectedPhaseGroupId === null ? null : this.#bracketNextPollAt(),
           failureCount: 0,
         },
       });
       await this.#saveOperator(operator);
       if (generation === this.#pollGeneration && !this.#closed) {
-        this.#schedulePoll(0, generation);
+        this.#scheduleBracketRefresh(this.bracketRefreshIntervalMs, generation);
       }
     } catch (error) {
       if (generation !== this.#pollGeneration) {
-        return;
+        throw error;
       }
       const message = this.#messageFromError(error);
       const current = this.getState();
@@ -318,17 +360,26 @@ export class TournamentService {
           status: current.event === null ? "error" : "stale",
           message,
           lastUpdatedAt: current.connection.lastUpdatedAt,
-          nextPollAt: null,
+          nextPollAt: canRetry(error)
+            ? new Date(Date.now() + retryDelay(this.pollIntervalMs, current.connection.failureCount + 1)).toISOString()
+            : null,
           failureCount: current.connection.failureCount + 1,
         },
       });
-      await this.#saveOperator(current.operator);
+      if (canRetry(error)) {
+        this.#scheduleBracketRefresh(
+          retryDelay(this.pollIntervalMs, current.connection.failureCount + 1),
+          generation,
+          () => this.loadEvent(providerId, input, true),
+        );
+      }
+      throw error;
     } finally {
       this.#clearActiveRequest(controller);
     }
   }
 
-  async #selectPhaseGroup(phaseGroupId: string): Promise<void> {
+  async #selectPhaseGroup(phaseGroupId: string, force = false): Promise<void> {
     const state = this.getState();
     const event = state.event;
     const group = event?.phaseGroups.find(
@@ -343,39 +394,43 @@ export class TournamentService {
     const generation = ++this.#pollGeneration;
     this.#cancelPoll();
     const controller = this.#beginRequest();
+    const age = group.setsFetchedAt === null
+      ? Number.POSITIVE_INFINITY
+      : Date.now() - Date.parse(group.setsFetchedAt);
+    const useCache = !force && group.setsLoaded && age < this.bracketRefreshIntervalMs;
     const operator: OperatorState = {
       ...state.operator,
       selectedPhaseGroupId: group.id,
       selectedSetId: group.setsLoaded
-        ? this.#resolveSetSelection(event, group.id, null)
+        ? this.#resolveSetSelection(event, group.id,
+          state.operator.selectedPhaseGroupId === group.id ? state.operator.selectedSetId : null)
         : null,
     };
     this.#commit({
       operator,
-      connection: group.setsLoaded
+      connection: useCache
         ? {
             ...state.connection,
             status: "fresh",
             message: null,
-            nextPollAt:
-              operator.selectedSetId === null ? null : this.#nextPollAt(0),
+            lastUpdatedAt: group.setsFetchedAt,
+            nextPollAt: new Date(Date.now() + this.bracketRefreshIntervalMs - age).toISOString(),
+            failureCount: 0,
           }
         : {
             ...state.connection,
             status: "loading",
+            lastUpdatedAt: group.setsFetchedAt,
             message: this.#phaseGroupLoadingMessage(event, group.id),
             nextPollAt: null,
           },
     });
-    await this.#saveOperator(operator);
-
-    if (group.setsLoaded) {
-      this.#clearActiveRequest(controller);
-      this.#schedulePoll(0, generation);
-      return;
-    }
-
     try {
+      await this.#saveOperator(operator);
+      if (useCache) {
+        this.#scheduleBracketRefresh(this.bracketRefreshIntervalMs - age, generation);
+        return;
+      }
       const provider = this.providers.get(state.operator.providerId);
       const loadedEvent = await this.#loadPhaseGroup(
         provider,
@@ -385,12 +440,12 @@ export class TournamentService {
         controller.signal,
       );
       if (generation !== this.#pollGeneration) {
-        return;
+        throw new DOMException("The request was superseded.", "AbortError");
       }
       const selectedSetId = this.#resolveSetSelection(
         loadedEvent,
         group.id,
-        null,
+        this.getState().operator.selectedSetId,
       );
       const loadedOperator = {
         ...this.getState().operator,
@@ -404,17 +459,17 @@ export class TournamentService {
           status: "fresh",
           message: null,
           lastUpdatedAt: new Date().toISOString(),
-          nextPollAt: selectedSetId === null ? null : this.#nextPollAt(0),
+          nextPollAt: this.#bracketNextPollAt(),
           failureCount: 0,
         },
       });
       await this.#saveOperator(loadedOperator);
       if (generation === this.#pollGeneration && !this.#closed) {
-        this.#schedulePoll(0, generation);
+        this.#scheduleBracketRefresh(this.bracketRefreshIntervalMs, generation);
       }
     } catch (error) {
       if (generation !== this.#pollGeneration) {
-        return;
+        throw error;
       }
       const current = this.getState();
       this.#commit({
@@ -422,10 +477,19 @@ export class TournamentService {
           ...current.connection,
           status: "stale",
           message: this.#messageFromError(error),
-          nextPollAt: null,
+          nextPollAt: canRetry(error)
+            ? new Date(Date.now() + retryDelay(this.pollIntervalMs, current.connection.failureCount + 1)).toISOString()
+            : null,
           failureCount: current.connection.failureCount + 1,
         },
       });
+      if (canRetry(error)) {
+        this.#scheduleBracketRefresh(
+          retryDelay(this.pollIntervalMs, current.connection.failureCount + 1),
+          generation,
+        );
+      }
+      throw error;
     } finally {
       this.#clearActiveRequest(controller);
     }
@@ -440,43 +504,16 @@ export class TournamentService {
         `Set "${setId}" is not available.`,
       );
     }
-    const group = state.event?.phaseGroups.find(
-      (candidate) => candidate.id === set.phaseGroupId,
-    );
-    if (
-      group?.setsLoaded === false &&
-      set.phaseGroupId === state.operator.selectedPhaseGroupId &&
-      state.connection.status === "loading"
-    ) {
-      const operator: OperatorState = {
-        ...state.operator,
-        selectedPhaseGroupId: set.phaseGroupId,
-        selectedSetId: set.id,
-      };
-      this.#commit({ operator });
-      await this.#saveOperator(operator);
-      return;
+    if (set.phaseGroupId !== state.operator.selectedPhaseGroupId) {
+      await this.#selectPhaseGroup(set.phaseGroupId);
     }
-
-    const generation = ++this.#pollGeneration;
-    this.#cancelPoll();
-    this.#abortActiveRequest();
     const operator: OperatorState = {
-      ...state.operator,
+      ...this.getState().operator,
       selectedPhaseGroupId: set.phaseGroupId,
       selectedSetId: set.id,
     };
-    this.#commit({
-      operator,
-      connection: {
-        ...state.connection,
-        nextPollAt: this.#nextPollAt(0),
-      },
-    });
+    this.#commit({ operator });
     await this.#saveOperator(operator);
-    if (generation === this.#pollGeneration && !this.#closed) {
-      this.#schedulePoll(0, generation);
-    }
   }
 
   async #updatePresentation(
@@ -509,73 +546,30 @@ export class TournamentService {
     await this.#saveOperator(operator);
   }
 
-  #schedulePoll(delayMs: number, generation: number): void {
+  #scheduleBracketRefresh(
+    delayMs: number,
+    generation: number,
+    retry?: () => Promise<void>,
+  ): void {
     if (this.#closed || generation !== this.#pollGeneration) {
       return;
     }
     this.#cancelPoll();
-    if (this.getState().operator.selectedSetId === null) {
+    const groupId = this.getState().operator.selectedPhaseGroupId;
+    if (retry === undefined && groupId === null) {
       return;
     }
     this.#pollTimer = setTimeout(() => {
-      void this.#pollSelectedSet(generation);
+      this.#pollTimer = null;
+      const refresh = retry ?? (() => groupId === null
+        ? Promise.reject(new Error("No phase group is selected."))
+        : this.#selectPhaseGroup(groupId, true));
+      void refresh().catch((error: unknown) => {
+        if (!(error instanceof Error && error.name === "AbortError")) {
+          console.warn("Scheduled bracket refresh failed:", requestMessage(error));
+        }
+      });
     }, delayMs);
-  }
-
-  async #pollSelectedSet(generation: number): Promise<void> {
-    if (generation !== this.#pollGeneration) {
-      return;
-    }
-    const state = this.getState();
-    const event = state.event;
-    const selectedSetId = state.operator.selectedSetId;
-    if (event === null || selectedSetId === null) {
-      return;
-    }
-
-    const controller = this.#beginRequest();
-    try {
-      const provider = this.providers.get(state.operator.providerId);
-      const set = await provider.loadSet(selectedSetId, event, {
-        signal: controller.signal,
-      });
-      if (generation !== this.#pollGeneration) {
-        return;
-      }
-      const updatedEvent = this.#replaceSet(event, set);
-      this.#commit({
-        event: updatedEvent,
-        connection: {
-          status: "fresh",
-          message: null,
-          lastUpdatedAt: new Date().toISOString(),
-          nextPollAt: this.#nextPollAt(1),
-          failureCount: 0,
-        },
-      });
-      this.#schedulePoll(this.pollIntervalMs, generation);
-    } catch (error) {
-      if (generation !== this.#pollGeneration) {
-        return;
-      }
-      const failureCount = state.connection.failureCount + 1;
-      const delay = Math.min(
-        this.pollIntervalMs * 2 ** failureCount,
-        120_000,
-      );
-      this.#commit({
-        connection: {
-          ...state.connection,
-          status: "stale",
-          message: this.#messageFromError(error),
-          nextPollAt: this.#nextPollAt(delay / this.pollIntervalMs),
-          failureCount,
-        },
-      });
-      this.#schedulePoll(delay, generation);
-    } finally {
-      this.#clearActiveRequest(controller);
-    }
   }
 
   async #loadPhaseGroup(
@@ -630,7 +624,7 @@ export class TournamentService {
 
   #commit(
     patch: Partial<
-      Pick<ServerState, "providers" | "operator" | "connection" | "event">
+      Pick<ServerState, "providers" | "operator" | "connection" | "liveConnection" | "event">
     >,
   ): void {
     const current = this.getState();
@@ -638,7 +632,6 @@ export class TournamentService {
     const operator = patch.operator ?? current.operator;
     const connection = patch.connection ?? current.connection;
     const event = patch.event === undefined ? current.event : patch.event;
-    const selectedSet = findSet(event, operator.selectedSetId);
     this.#hub.publish({
       ...current,
       ...patch,
@@ -648,10 +641,10 @@ export class TournamentService {
       event,
       overlay: deriveOverlayView(
         revision,
-        event,
-        selectedSet,
+        this.#liveEvent,
+        this.#liveSet,
         operator.presentation,
-        connection.status,
+        (patch.liveConnection ?? current.liveConnection).status,
       ),
     });
   }
@@ -684,15 +677,21 @@ export class TournamentService {
   }
 
   #saveOperator(operator: OperatorState): Promise<void> {
-    const save = this.#saveQueue.then(() => this.store.save(operator));
+    const save = this.#saveQueue
+      .then(() => this.store.save(operator))
+      .catch((error: unknown) => {
+        throw new ProviderError(
+          "persistence_failed",
+          "The scene changed, but its settings could not be saved locally. Check the state file location and permissions.",
+          { cause: error },
+        );
+      });
     this.#saveQueue = save.catch(() => undefined);
     return save;
   }
 
-  #nextPollAt(multiplier: number): string {
-    return new Date(
-      Date.now() + this.pollIntervalMs * multiplier,
-    ).toISOString();
+  #bracketNextPollAt(): string {
+    return new Date(Date.now() + this.bracketRefreshIntervalMs).toISOString();
   }
 
   #phaseGroupLoadingMessage(
@@ -711,7 +710,7 @@ export class TournamentService {
     event: NormalizedEvent,
     previous: NormalizedEvent | null,
   ): NormalizedEvent {
-    if (previous?.id !== event.id) {
+    if (previous?.id !== event.id || previous.providerId !== event.providerId) {
       return event;
     }
     return {
@@ -720,7 +719,12 @@ export class TournamentService {
         const cached = previous.phaseGroups.find(
           (candidate) => candidate.id === group.id && candidate.setsLoaded,
         );
-        return cached === undefined ? group : cached;
+        return cached === undefined ? group : {
+          ...group,
+          setsLoaded: cached.setsLoaded,
+          setsFetchedAt: cached.setsFetchedAt,
+          sets: cached.sets,
+        };
       }),
     };
   }
@@ -748,6 +752,9 @@ export class TournamentService {
     );
     if (group === undefined) {
       return null;
+    }
+    if (!group.setsLoaded && requested !== null) {
+      return requested;
     }
     if (
       requested !== null &&
@@ -798,6 +805,7 @@ export class TournamentService {
           ? {
               ...group,
               setsLoaded,
+              setsFetchedAt: setsLoaded ? new Date().toISOString() : group.setsFetchedAt,
               sets: mergedSets,
             }
           : group,

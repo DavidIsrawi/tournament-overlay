@@ -16,10 +16,14 @@ import {
 function SetCard({
   set,
   selected,
+  live,
+  disabled,
   onSelect,
 }: {
   readonly set: NormalizedSet;
   readonly selected: boolean;
+  readonly live: boolean;
+  readonly disabled: boolean;
   readonly onSelect: () => void;
 }): ReactNode {
   return (
@@ -27,11 +31,12 @@ function SetCard({
       className={`set-card set-card--${set.state}`}
       type="button"
       aria-pressed={selected}
+      disabled={disabled}
       onClick={onSelect}
     >
       <span className="set-card__topline">
         <span>{set.identifier}</span>
-        <span>{set.state}</span>
+        <span>{live ? "On air" : set.state}</span>
       </span>
       {set.entrants.map((slot, index) => (
         <span className="set-card__entrant" key={slot?.entrant.id ?? index}>
@@ -60,9 +65,11 @@ function AnchorIcon(): ReactNode {
 export function BracketWorkspace({
   state,
   send,
+  disabled,
 }: {
   readonly state: ServerState;
   readonly send: (command: ClientCommand) => boolean;
+  readonly disabled: boolean;
 }): ReactNode {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SetFilter>("pending");
@@ -83,6 +90,7 @@ export function BracketWorkspace({
       <div className="bracket__tools">
         <div>
           <h1>{group?.phaseName ?? "Bracket"}</h1>
+          <p>Select a set to preview. Only Take live changes the broadcast.</p>
           <p>
             {group === undefined
               ? "Load an event to browse its phase groups."
@@ -122,7 +130,7 @@ export function BracketWorkspace({
           <h2>No bracket loaded</h2>
           <p>Enter a StartGG event URL or slug in the controls above.</p>
         </div>
-      ) : !group.setsLoaded && rounds.length === 0 ? (
+      ) : !group.setsLoaded && rounds.length === 0 && state.connection.status === "loading" ? (
         <div className="empty-state">
           <h2>Loading bracket</h2>
           <p>{state.connection.message ?? "Fetching sets from StartGG…"}</p>
@@ -146,6 +154,10 @@ export function BracketWorkspace({
                     key={set.id}
                     set={set}
                     selected={state.operator.selectedSetId === set.id}
+                    live={state.operator.liveSelection?.providerId === state.event?.providerId &&
+                      state.operator.liveSelection?.eventInput === state.event?.slug &&
+                      state.overlay.setId === set.id}
+                    disabled={disabled}
                     onSelect={() => send({ type: "set.select", setId: set.id })}
                   />
                 ))}

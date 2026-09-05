@@ -10,6 +10,7 @@ import {
   type OverlayAnimationEvent,
 } from "./overlay-events.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CommandTracker, type PendingCommand } from "./command-tracker.ts";
 
 export type SocketStatus =
   | "connecting"
@@ -22,6 +23,8 @@ interface TournamentSocket {
   readonly socketStatus: SocketStatus;
   readonly error: string | null;
   readonly animationEvents: readonly OverlayAnimationEvent[];
+  readonly pendingCommands: readonly PendingCommand[];
+  readonly dismissError: () => void;
   readonly sendCommand: (command: ClientCommand) => boolean;
 }
 
@@ -43,6 +46,14 @@ export function useTournamentSocket(
   const socketRef = useRef<WebSocket | null>(null);
   const stateRef = useRef<ServerState | null>(null);
   const nextAnimationSequenceRef = useRef(1);
+  const commandsRef = useRef(new CommandTracker());
+  const [pendingCommands, setPendingCommands] = useState<readonly PendingCommand[]>([]);
+  const [commandError, setCommandError] = useState<string | null>(null);
+
+  const updateCommands = useCallback((): void => {
+    setPendingCommands(commandsRef.current.pending);
+    setCommandError(commandsRef.current.error);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -58,8 +69,9 @@ export function useTournamentSocket(
       socketRef.current = socket;
 
       socket.addEventListener("open", () => {
-        attempts = 0;
-        setSocketStatus("connected");
+        if (!active || socketRef.current !== socket) {
+          return;
+        }
         setError(null);
         const hello: ClientMessage = {
           type: "client.hello",
@@ -70,6 +82,9 @@ export function useTournamentSocket(
       });
 
       socket.addEventListener("message", (event) => {
+        if (!active || socketRef.current !== socket) {
+          return;
+        }
         let input: unknown;
         try {
           input = JSON.parse(String(event.data));
@@ -88,6 +103,11 @@ export function useTournamentSocket(
           return;
         }
         if (message.data.type === "state.snapshot") {
+          attempts = 0;
+          setSocketStatus("connected");
+          setError(null);
+          commandsRef.current.reconcileBracket(message.data.state.connection.status);
+          updateCommands();
           const events = deriveOverlayAnimationEvents(
             stateRef.current?.overlay ?? null,
             message.data.state.overlay,
@@ -100,19 +120,32 @@ export function useTournamentSocket(
           return;
         }
         if (message.data.type === "command.error") {
-          setError(message.data.message);
+          if (message.data.code === "command_superseded" && message.data.commandId !== null) {
+            commandsRef.current.acknowledge(message.data.commandId);
+          } else {
+            commandsRef.current.fail(message.data.commandId, message.data.message);
+          }
+          updateCommands();
+        }
+        if (message.data.type === "command.ack") {
+          commandsRef.current.acknowledge(message.data.commandId);
+          updateCommands();
         }
       });
 
       socket.addEventListener("error", () => {
-        setError("The live connection encountered an error.");
+        if (active && socketRef.current === socket) {
+          setError("The live connection encountered an error.");
+        }
       });
 
       socket.addEventListener("close", () => {
-        if (!active) {
+        if (!active || socketRef.current !== socket) {
           return;
         }
         attempts += 1;
+        commandsRef.current.disconnect();
+        updateCommands();
         setSocketStatus("reconnecting");
         reconnectTimer = window.setTimeout(
           connect,
@@ -130,11 +163,11 @@ export function useTournamentSocket(
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [client]);
+  }, [client, updateCommands]);
 
   const sendCommand = useCallback((command: ClientCommand): boolean => {
     const socket = socketRef.current;
-    if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    if (socketStatus !== "connected" || socket === null || socket.readyState !== WebSocket.OPEN) {
       setError("The command was not sent because the server is disconnected.");
       return false;
     }
@@ -143,9 +176,36 @@ export function useTournamentSocket(
       commandId: crypto.randomUUID(),
       command,
     };
-    socket.send(JSON.stringify(message));
+    if (!commandsRef.current.begin(message.commandId, command)) {
+      return false;
+    }
+    try {
+      socket.send(JSON.stringify(message));
+    } catch (sendError) {
+      commandsRef.current.fail(
+        message.commandId,
+        sendError instanceof Error ? sendError.message : "The command could not be sent.",
+      );
+      updateCommands();
+      return false;
+    }
+    updateCommands();
     return true;
-  }, []);
+  }, [socketStatus, updateCommands]);
 
-  return { state, socketStatus, error, animationEvents, sendCommand };
+  const dismissError = useCallback(() => {
+    commandsRef.current.dismissError();
+    setError(null);
+    updateCommands();
+  }, [updateCommands]);
+
+  return {
+    state,
+    socketStatus,
+    error: commandError ?? error,
+    animationEvents,
+    sendCommand,
+    pendingCommands,
+    dismissError,
+  };
 }

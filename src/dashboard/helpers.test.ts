@@ -81,6 +81,58 @@ describe("buildVisibleRounds", () => {
       },
     ]);
   });
+
+  it("orders losers rounds by bracket progression rather than signed values", () => {
+    const losers = [
+      set("L3", "Losers Final", -3, "pending", "Ada", "Grace"),
+      set("L1", "Losers Round 1", -1, "active", "Linus", "Margaret"),
+      set("L2", "Losers Round 2", -2, "pending", "Barbara", "Ken"),
+    ];
+
+    expect(buildVisibleRounds(losers, "", "pending").map(({ order }) => order)).toEqual([-1, -2, -3]);
+  });
+
+  it("keeps ascending winners rounds before progressing losers rounds in mixed brackets", () => {
+    const mixed = [
+      set("L2", "Losers Final", -2, "pending", "Ada", "Grace"),
+      set("W3", "Grand Final", 3, "pending", "Linus", "Margaret"),
+      set("L1", "Losers Round 1", -1, "pending", "Barbara", "Ken"),
+      set("W1", "Winners Round 1", 1, "pending", "Ada", "Grace"),
+      set("W2", "Winners Final", 2, "pending", "Linus", "Margaret"),
+      set("R0", "Unassigned Round", 0, "pending", "Barbara", "Ken"),
+    ];
+
+    const expected = [0, 1, 2, 3, -1, -2];
+    expect(buildVisibleRounds(mixed, "", "pending").map(({ order }) => order)).toEqual(expected);
+    expect(buildVisibleRounds([...mixed].reverse(), "", "pending").map(({ order }) => order)).toEqual(expected);
+  });
+
+  it("breaks equal-order round ties deterministically by name within each bracket", () => {
+    const tied = [
+      set("WB", "Winners B", 1, "pending", "Ada", "Grace"),
+      set("LB", "Losers B", -1, "pending", "Linus", "Margaret"),
+      set("LA", "Losers A", -1, "pending", "Barbara", "Ken"),
+      set("WA", "Winners A", 1, "pending", "Ada", "Grace"),
+    ];
+
+    const expected = ["Winners A", "Winners B", "Losers A", "Losers B"];
+    expect(buildVisibleRounds(tied, "", "pending").map(({ name }) => name)).toEqual(expected);
+    expect(buildVisibleRounds([...tied].reverse(), "", "pending").map(({ name }) => name)).toEqual(expected);
+  });
+
+  it("preserves search and state filters when ordering negative and mixed rounds", () => {
+    const mixed = [
+      set("L3", "Losers Final", -3, "completed", "Ada", "Grace"),
+      set("L2", "Losers Round 2", -2, "pending", "Ada", "Grace"),
+      set("W2", "Winners Final", 2, "active", "Ada", "Linus"),
+      set("L1", "Losers Round 1", -1, "active", "Ada", "Margaret"),
+      set("W1", "Winners Round 1", 1, "pending", "Barbara", "Ken"),
+      set("L0", "Losers Round 1", -1, "completed", "Ada", "Ken"),
+    ];
+
+    expect(buildVisibleRounds(mixed, " ADA ", "pending").map(({ order }) => order)).toEqual([2, -1, -2]);
+    expect(buildVisibleRounds(mixed, " ADA ", "completed").map(({ order }) => order)).toEqual([-1, -3]);
+  });
 });
 
 describe("connectionNotice", () => {

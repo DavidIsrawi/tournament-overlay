@@ -24,6 +24,12 @@ describe("AtomicOperatorStateStore", () => {
       eventInput: "genesis-9/event/melee-singles",
       selectedPhaseGroupId: "top-8",
       selectedSetId: "set-5",
+      liveSelection: {
+        providerId: "startgg",
+        eventInput: "genesis-9/event/melee-singles",
+        phaseGroupId: "top-8",
+        setId: "set-5",
+      },
       presentation: {
         sideOrder: "swapped" as const,
         overlayTemplateId: "minimal" as const,

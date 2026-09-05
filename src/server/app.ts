@@ -10,6 +10,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { RawData, WebSocket } from "ws";
 import { z } from "zod";
 import type { TournamentService } from "./service.ts";
+import { ProviderError } from "../providers/index.ts";
 
 const startGgTokenSchema = z
   .object({
@@ -53,6 +54,7 @@ export async function buildApp(
       revision: state.revision,
       provider: state.operator.providerId,
       connection: state.connection,
+      liveConnection: state.liveConnection,
     };
   });
 
@@ -71,6 +73,8 @@ export async function buildApp(
 
   app.get("/ws", { websocket: true }, (socket) => {
     let identified = false;
+    const commands = new Map<string, Promise<ServerMessage>>();
+    const completedCommands = new Set<string>();
     const unsubscribe = service.subscribe((state) => {
       if (identified) {
         send(socket, { type: "state.snapshot", state });
@@ -125,23 +129,40 @@ export async function buildApp(
         return;
       }
 
-      void service
+      const existing = commands.get(commandMessage.commandId);
+      if (existing !== undefined) {
+        void existing.then((message) => send(socket, message));
+        return;
+      }
+      const result = service
         .dispatch(commandMessage.command)
-        .then(() => {
-          send(socket, {
-            type: "command.ack",
-            commandId: commandMessage.commandId,
-          });
-        })
-        .catch((error: unknown) => {
-          send(socket, {
-            type: "command.error",
-            commandId: commandMessage.commandId,
-            code: "command_failed",
-            message:
-              error instanceof Error ? error.message : "Command failed.",
-          });
-        });
+        .then((): ServerMessage => ({
+          type: "command.ack",
+          commandId: commandMessage.commandId,
+        }))
+        .catch((error: unknown): ServerMessage => ({
+          type: "command.error",
+          commandId: commandMessage.commandId,
+          code: error instanceof ProviderError ? error.code
+            : error instanceof Error && error.name === "AbortError"
+              ? "command_superseded"
+              : "command_failed",
+          message:
+            error instanceof Error ? error.message : "Command failed.",
+        }));
+      commands.set(commandMessage.commandId, result);
+      void result.then((message) => {
+        send(socket, message);
+        // Keep recent completions to make duplicate command IDs idempotent.
+        completedCommands.add(commandMessage.commandId);
+        if (completedCommands.size > 100) {
+          const oldest = completedCommands.keys().next().value;
+          if (oldest !== undefined) {
+            commands.delete(oldest);
+            completedCommands.delete(oldest);
+          }
+        }
+      });
     });
 
     socket.on("close", unsubscribe);

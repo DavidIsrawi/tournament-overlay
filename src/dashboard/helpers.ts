@@ -95,7 +95,15 @@ export function buildVisibleRounds(
 
   return [...byRound.entries()]
     .map(([name, round]) => ({ name, ...round }))
-    .sort((left, right) => left.order - right.order);
+    .sort((left, right) => {
+      const leftBracket = left.order < 0 ? 1 : 0;
+      const rightBracket = right.order < 0 ? 1 : 0;
+      return (
+        leftBracket - rightBracket ||
+        Math.abs(left.order) - Math.abs(right.order) ||
+        left.name.localeCompare(right.name)
+      );
+    });
 }
 
 export function connectionNotice(
