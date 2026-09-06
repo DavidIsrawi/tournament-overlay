@@ -5,6 +5,7 @@ import {
   type ServerState,
 } from "../shared/contracts.ts";
 import { StateHub } from "./state-hub.ts";
+import { APP_VERSION } from "../shared/app-info.ts";
 
 function makeState(revision: number): ServerState {
   const connection = {
@@ -15,6 +16,7 @@ function makeState(revision: number): ServerState {
     failureCount: 0,
   };
   return {
+    appVersion: APP_VERSION,
     protocolVersion: PROTOCOL_VERSION,
     revision,
     startedAt: "2026-08-19T00:00:00.000Z",

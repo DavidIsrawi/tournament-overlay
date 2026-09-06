@@ -11,6 +11,10 @@ import type { RawData, WebSocket } from "ws";
 import { z } from "zod";
 import type { TournamentService } from "./service.ts";
 import { ProviderError } from "../providers/index.ts";
+import { APP_VERSION, type UpdateCheck } from "../shared/app-info.ts";
+import { clientHelloVersionSchema, reloadMessage, versionsMatch } from "../shared/compatibility.ts";
+import { assertMatchingBrowserAssets } from "./browser-assets.ts";
+import { GitHubUpdateChecker, releaseTarget, UpdateCheckError } from "./updates.ts";
 
 const startGgTokenSchema = z
   .object({
@@ -42,13 +46,42 @@ export async function buildApp(
   service: TournamentService,
   publicDirectory: string,
   credentialSettings?: CredentialSettings,
+  options: { readonly checkForUpdates?: () => Promise<UpdateCheck> } = {},
 ): Promise<FastifyInstance> {
+  const hasBrowserAssets = existsSync(publicDirectory);
+  if (hasBrowserAssets) {
+    await assertMatchingBrowserAssets(publicDirectory);
+  }
   const app = Fastify({ logger: true });
   await app.register(fastifyWebsocket);
+  const info = {
+    version: APP_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
+    platform: process.platform,
+    architecture: process.arch,
+    target: releaseTarget(process.platform, process.arch),
+  };
+  const checker = new GitHubUpdateChecker(info.target);
+
+  app.get("/api/app", (_request, reply) => reply.header("Cache-Control", "no-store").send(info));
+  app.post("/api/updates/check", async (_request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    try {
+      return await (options.checkForUpdates?.() ?? checker.check());
+    } catch (error) {
+      if (!(error instanceof UpdateCheckError)) {
+        throw error;
+      }
+      app.log.warn({ err: error }, "Update check failed");
+      return reply.code(502).send({ error: error.message });
+    }
+  });
 
   app.get("/api/health", () => {
     const state = service.getState();
     return {
+      version: APP_VERSION,
+      protocolVersion: PROTOCOL_VERSION,
       ok: state.connection.status !== "error",
       startedAt: state.startedAt,
       revision: state.revision,
@@ -95,6 +128,19 @@ export async function buildApp(
               ? `Message is not valid JSON: ${error.message}`
               : "Message is not valid JSON.",
         });
+        return;
+      }
+
+      const hello = clientHelloVersionSchema.safeParse(input);
+      if (hello.success && !versionsMatch(hello.data.appVersion, hello.data.protocolVersion)) {
+        identified = false;
+        send(socket, {
+          type: "command.error",
+          commandId: null,
+          code: "client_version_mismatch",
+          message: reloadMessage(hello.data.client),
+        });
+        socket.close(4006, "Reload the dashboard or refresh the OBS browser source.");
         return;
       }
 
@@ -172,10 +218,15 @@ export async function buildApp(
     reply.code(308).redirect("/overlay/?template=octagon"),
   );
 
-  if (existsSync(publicDirectory)) {
+  if (hasBrowserAssets) {
     await app.register(fastifyStatic, {
       root: publicDirectory,
       prefix: "/",
+      setHeaders(reply, path) {
+        if (path.endsWith(".html") || path.endsWith("app-build.json")) {
+          void reply.header("Cache-Control", "no-store");
+        }
+      },
     });
   } else {
     app.get("/", (_request, reply) =>

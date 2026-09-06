@@ -29,6 +29,18 @@ The server, dashboard, and OBS browser source run on one operator machine. Opera
 - Public GraphQL cannot supply live stage-strike or DSR task state.
 - Provider source data remains immutable; local side swapping is presentation state.
 - The first release is a local single-operator tool, not a hosted multi-user service.
+- The product targets single-stream tournaments; independent multi-stream outputs
+  are out of scope.
+- Native release packages and portable archives include the runtime. Updates are
+  checked only on operator request and are installed manually between broadcasts.
+- The macOS app uses a native launcher: reopening it opens the current dashboard,
+  while its Quit action stops the owned local server.
+- Credentials and versioned operator settings stay outside the installation;
+  migrations preserve backups, and mismatched browser/server versions require an
+  explicit dashboard reload or OBS source refresh.
+- Upgrade instructions belong in the operator dashboard, not the broadcast
+  overlay. An incompatible overlay retains its last scoreboard or stays
+  transparent until a compatible scene is available.
 
 ## Brand Commitments
 

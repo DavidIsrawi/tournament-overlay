@@ -11,6 +11,8 @@ import {
 } from "./overlay-events.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CommandTracker, type PendingCommand } from "./command-tracker.ts";
+import { APP_VERSION } from "./app-info.ts";
+import { reloadMessage, snapshotNeedsReload } from "./compatibility.ts";
 
 export type SocketStatus =
   | "connecting"
@@ -24,6 +26,7 @@ interface TournamentSocket {
   readonly error: string | null;
   readonly animationEvents: readonly OverlayAnimationEvent[];
   readonly pendingCommands: readonly PendingCommand[];
+  readonly upgradeRequired: boolean;
   readonly dismissError: () => void;
   readonly sendCommand: (command: ClientCommand) => boolean;
 }
@@ -40,6 +43,7 @@ export function useTournamentSocket(
   const [socketStatus, setSocketStatus] =
     useState<SocketStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
   const [animationEvents, setAnimationEvents] = useState<
     readonly OverlayAnimationEvent[]
   >([]);
@@ -59,22 +63,34 @@ export function useTournamentSocket(
     let active = true;
     let attempts = 0;
     let reconnectTimer: number | null = null;
+    let reloadRequired = false;
 
     const connect = (): void => {
-      if (!active) {
+      if (!active || reloadRequired) {
         return;
       }
       setSocketStatus(attempts === 0 ? "connecting" : "reconnecting");
       const socket = new WebSocket(websocketUrl());
       socketRef.current = socket;
+      let synchronized = false;
+      const requireReload = (): void => {
+        reloadRequired = true;
+        setUpgradeRequired(true);
+        setSocketStatus("disconnected");
+        commandsRef.current.disconnect();
+        updateCommands();
+        setError(reloadMessage(client));
+        socket.close(4006, "Browser and server versions differ.");
+      };
 
       socket.addEventListener("open", () => {
-        if (!active || socketRef.current !== socket) {
+        if (!active || reloadRequired || socketRef.current !== socket) {
           return;
         }
         setError(null);
         const hello: ClientMessage = {
           type: "client.hello",
+          appVersion: APP_VERSION,
           protocolVersion: PROTOCOL_VERSION,
           client,
         };
@@ -82,7 +98,7 @@ export function useTournamentSocket(
       });
 
       socket.addEventListener("message", (event) => {
-        if (!active || socketRef.current !== socket) {
+        if (!active || reloadRequired || socketRef.current !== socket) {
           return;
         }
         let input: unknown;
@@ -97,12 +113,17 @@ export function useTournamentSocket(
           return;
         }
 
+        if (snapshotNeedsReload(input)) {
+          requireReload();
+          return;
+        }
         const message = serverMessageSchema.safeParse(input);
         if (!message.success) {
           setError("Server sent a message that does not match the protocol.");
           return;
         }
         if (message.data.type === "state.snapshot") {
+          synchronized = true;
           attempts = 0;
           setSocketStatus("connected");
           setError(null);
@@ -120,6 +141,11 @@ export function useTournamentSocket(
           return;
         }
         if (message.data.type === "command.error") {
+          if (message.data.code === "client_version_mismatch" ||
+              (!synchronized && message.data.commandId === null && message.data.code === "invalid_message")) {
+            requireReload();
+            return;
+          }
           if (message.data.code === "command_superseded" && message.data.commandId !== null) {
             commandsRef.current.acknowledge(message.data.commandId);
           } else {
@@ -134,13 +160,19 @@ export function useTournamentSocket(
       });
 
       socket.addEventListener("error", () => {
-        if (active && socketRef.current === socket) {
+        if (active && !reloadRequired && socketRef.current === socket) {
           setError("The live connection encountered an error.");
         }
       });
 
-      socket.addEventListener("close", () => {
+      socket.addEventListener("close", (event) => {
         if (!active || socketRef.current !== socket) {
+          return;
+        }
+        if (event.code === 4006 && !reloadRequired) {
+          requireReload();
+        }
+        if (reloadRequired) {
           return;
         }
         attempts += 1;
@@ -202,10 +234,11 @@ export function useTournamentSocket(
   return {
     state,
     socketStatus,
-    error: commandError ?? error,
+    error: upgradeRequired ? reloadMessage(client) : commandError ?? error,
     animationEvents,
     sendCommand,
     pendingCommands,
+    upgradeRequired,
     dismissError,
   };
 }

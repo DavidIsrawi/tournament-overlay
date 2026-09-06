@@ -38,23 +38,63 @@ jobs:
       - run: npm run build:executable
       - run: npm run test:executable
 
-      - name: Package executable
-        if: runner.os != 'Windows'
-        run: >-
-          tar -C dist/executable -czf
-          tournament-overlay-${{ matrix.target }}.tar.gz .
-
-      - name: Package executable
+      - name: Locate or install Inno Setup
         if: runner.os == 'Windows'
         shell: pwsh
-        run: >-
-          Compress-Archive -Path dist/executable/*
-          -DestinationPath tournament-overlay-${{ matrix.target }}.zip
+        run: |
+          function Find-InnoCompiler {
+            $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if ($command) { return $command.Source }
+            foreach ($base in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
+              if ($base) {
+                $candidate = Join-Path $base 'Inno Setup 6\ISCC.exe'
+                if (Test-Path -LiteralPath $candidate) { return $candidate }
+              }
+            }
+            return $null
+          }
+          $compiler = Find-InnoCompiler
+          if (-not $compiler) {
+            choco install innosetup --yes --no-progress --limit-output
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
+            $compiler = Find-InnoCompiler
+          }
+          if (-not $compiler) { throw 'Inno Setup 6 compiler not found.' }
+          "ISCC_PATH=$compiler" >> $env:GITHUB_ENV
+
+      - name: Package native installers and portable archives
+        run: npm run package:release -- --target ${{ matrix.target }}
+
+      - name: Smoke test the app from its disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          image="$PWD/dist/release/tournament-overlay-${{ matrix.target }}.dmg"
+          mount="$PWD/dist/packaging/mounted-app"
+          mkdir -p "$mount"
+          hdiutil verify "$image"
+          hdiutil attach "$image" -readonly -nobrowse -mountpoint "$mount"
+          trap 'hdiutil detach "$mount"' EXIT
+          PUBLIC_DIRECTORY="$mount/Tournament Overlay.app/Contents/Resources/public" \
+            EXECUTABLE_PATH="$mount/Tournament Overlay.app/Contents/MacOS/TournamentOverlay" npm run test:executable
+          MACOS_APP_PATH="$mount/Tournament Overlay.app" node --import tsx scripts/smoke-macos-app.ts
+
+      - name: Smoke test the extracted Linux archive
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/packaging/extracted
+          tar -xzf dist/release/tournament-overlay-${{ matrix.target }}.tar.gz -C dist/packaging/extracted
+          EXECUTABLE_PATH="$PWD/dist/packaging/extracted/TournamentOverlay" npm run test:executable
+
+      - name: Test Windows installation and safe replacement
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/packaging/test-windows-install.ps1
 
       - uses: actions/upload-artifact@v4
         with:
           name: tournament-overlay-${{ matrix.target }}
-          path: tournament-overlay-${{ matrix.target }}.*
+          path: dist/release/tournament-overlay-${{ matrix.target }}*
           if-no-files-found: error
           retention-days: 7
 

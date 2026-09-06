@@ -2,7 +2,30 @@
 
 A local, read-only tournament operator dashboard and OBS browser-source overlay. One Node server owns provider access, polling, presentation state, persistence, and live updates; browser clients never contact StartGG.
 
-## Quick start
+## Install a release
+
+Download the package for your computer from
+[GitHub Releases](https://github.com/DavidIsrawi/tournament-overlay/releases).
+Release packages include Node.js; you do not need to install a runtime.
+
+| Computer | Recommended download | Installation |
+| --- | --- | --- |
+| macOS Apple Silicon | `tournament-overlay-macos-arm64.dmg` | Open the disk image, drag **Tournament Overlay.app** to Applications, eject the image, and launch the installed app. |
+| macOS Intel | `tournament-overlay-macos-x64.dmg` | Use the same drag-to-Applications flow. |
+| Windows x64 | `tournament-overlay-windows-x64-setup.exe` | Run the per-user installer, then launch Tournament Overlay from the Start Menu. |
+| Linux x64 | `tournament-overlay-linux-x64.tar.gz` | Extract the complete archive and run `./TournamentOverlay` from its directory. |
+
+Portable archives remain available for macOS and Windows. Keep the executable
+and its `public/` directory together; copying just the executable is not enough.
+The app opens your dashboard in the default browser. The default OBS browser
+source remains <http://127.0.0.1:3100/overlay/>.
+
+These packages are not publisher-signed or notarized: macOS builds are ad-hoc
+signed and Windows builds are unsigned. Operating-system security warnings may
+appear. `SHA256SUMS.txt` lets you check download integrity; checksums are not a
+replacement for publisher signatures.
+
+## Quick start (development)
 
 Requires Node.js 24 LTS and npm 11 or newer.
 
@@ -63,6 +86,7 @@ The production server serves:
 - Dashboard: <http://127.0.0.1:3100/>
 - Live overlay: <http://127.0.0.1:3100/overlay/>
 - Health JSON: <http://127.0.0.1:3100/api/health>
+- Installed version and platform: <http://127.0.0.1:3100/api/app>
 - WebSocket: `ws://127.0.0.1:3100/ws`
 
 Use the dashboard's **Copy OBS URL** or **Open overlay** action instead of constructing the URL manually.
@@ -89,6 +113,88 @@ macOS Apple Silicon, macOS Intel, Windows x64, and Linux x64. The workflow
 publishes each archive and a `SHA256SUMS.txt` file to the corresponding GitHub
 Release. The macOS executables are ad-hoc signed; public distribution without a
 Gatekeeper warning requires a Developer ID certificate and notarization.
+
+After building the executable, `npm run package:release` creates native packages
+and portable archives in `dist/release/` for the current platform. The release
+workflow packages each target before publishing the downloads and checksums.
+macOS packaging uses the Xcode Command Line Tools (`swiftc`), `codesign`,
+`hdiutil`, and `plutil`. The native AppKit launcher handles Finder reopen events,
+reopens the existing dashboard, and owns the server process. **Quit Tournament
+Overlay** (or the Dock's Quit action) stops both the app and its server. Closing
+the browser alone leaves the server running.
+Windows packaging requires Inno Setup
+6 (`ISCC_PATH` can point to `ISCC.exe`); the release workflow locates it or installs
+it if absent. The installer defaults to `%LOCALAPPDATA%\Programs\Tournament Overlay`
+and refuses to replace or uninstall a running executable.
+
+## Updates and saved settings
+
+Open **About & updates** in the dashboard (also available on the first-run token
+screen). It shows the installed application version, dashboard version, and
+server platform. **Check for updates** contacts the public GitHub stable-release
+endpoint only when requested; no GitHub account or token is needed. Successful
+checks are cached for five minutes. Offline errors and rate limits do not stop
+the broadcast. Prereleases and drafts are excluded, and a newer local version
+is never offered an older release as an upgrade.
+
+When available, the download action selects a native package for the running
+server's platform and architecture, not the browser's device. If no matching
+asset is listed, use the release page to choose a compatible download.
+There is no automatic package download, installation, or restart.
+
+Upgrade between broadcasts:
+
+1. Read the release notes and download the new package.
+2. Finish the broadcast and stop the running application. Closing the dashboard
+   tab does not stop the server. For a portable console launch, press `Ctrl+C`.
+   On macOS, choose **Quit Tournament Overlay** from the application menu or
+   **Quit** from its Dock menu before replacing the app. When upgrading from the
+   earlier headless app wrapper, stop `TournamentOverlay` in Activity Monitor once.
+3. Replace the complete macOS app or run the Windows installer. For a portable
+   installation, extract the new release into a separate directory; do not copy
+   a new executable over an old `public/` folder.
+4. Reopen the application, reload the dashboard, and refresh the OBS browser
+   source. Keep the existing OBS URL unless you intentionally changed `PORT`.
+
+By default, credentials and operator settings are outside the installation:
+
+| Platform | User configuration directory |
+| --- | --- |
+| macOS | `~/Library/Application Support/Tournament Overlay/` |
+| Windows | `%APPDATA%\Tournament Overlay\` |
+| Linux | `$XDG_CONFIG_HOME/tournament-overlay/`, or `~/.config/tournament-overlay/` |
+
+`config.json` contains the StartGG token; `operator-state.json` contains the
+preview/live selections and presentation settings. Replacing the application
+does not replace these files. The Windows uninstaller preserves them.
+Custom `CONFIG_FILE` and `STATE_FILE` paths remain your responsibility; keep
+them outside any installation directory you replace.
+
+Saved operator state uses a versioned format. A migration backs up the original
+file before rewriting it, and unknown newer formats are rejected rather than
+overwritten. The current envelope is
+`{ "schemaVersion": 1, "appVersion": "...", "operator": { ... } }`.
+Unversioned files migrate as schema 0, preserving their previous live selection.
+Their exact original bytes are backed up beside the state file as
+`operator-state.json.schema-0.<timestamp-ms>.<uuid>.bak`, with owner-only
+permissions. Backups are not automatically deleted; loading an already-current
+format does not create another backup just because the app version changed.
+If settings cannot be loaded, the dashboard reports the failure
+and scene commands are blocked. Downgrades are not automatically safe: stop the
+application and preserve the current state before restoring a backup compatible
+with the older release. Restoring a backup loses changes made since that backup.
+Never restore an old application over newer state
+without checking format compatibility.
+
+The server also checks version/protocol manifests in both browser bundles.
+Missing or mismatched bundles require reinstalling the complete release (or
+`npm run build` in a source checkout). Browser entry pages are not cached across
+upgrades. Upgrade and OBS refresh instructions appear only in the operator
+dashboard, never on the broadcast overlay. An incompatible overlay retains its
+last scoreboard, or stays transparent if it has not received a scene.
+Neither client automatically reloads during a broadcast.
+
+## Creating a release
 
 Create a release from a clean, synchronized `main` branch with one semantic
 version flag:
@@ -140,7 +246,7 @@ scene they represented before preview/live separation.
 Clients connect to `/ws` and identify themselves:
 
 ```json
-{"type":"client.hello","protocolVersion":5,"client":"dashboard"}
+{"type":"client.hello","appVersion":"<installed package version>","protocolVersion":6,"client":"dashboard"}
 ```
 
 The server answers with the complete current state:
@@ -148,6 +254,11 @@ The server answers with the complete current state:
 ```ts
 { type: "state.snapshot"; state: ServerState }
 ```
+
+The hello must match both the installed application version and protocol version.
+A mismatch returns `command.error` with code `client_version_mismatch` and closes
+the socket with code `4006`, before accepting commands or sending scene state.
+Snapshots include `appVersion` so clients can also detect an incompatible server.
 
 Dashboard commands are correlated:
 
