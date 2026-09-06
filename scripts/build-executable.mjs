@@ -6,10 +6,12 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { resolve } from "node:path";
 import { build } from "esbuild";
+import packageInfo from "../package.json" with { type: "json" };
 
 const root = process.cwd();
 const seaDirectory = resolve(root, "dist/sea");
@@ -20,6 +22,10 @@ const executableName =
   process.platform === "win32" ? "TournamentOverlay.exe" : "TournamentOverlay";
 const executablePath = resolve(outputDirectory, executableName);
 const postjectCliPath = resolve(root, "node_modules/postject/dist/cli.js");
+
+if (Number(process.versions.node.split(".")[0]) !== 24) {
+  throw new Error("Executable builds require Node.js 24.");
+}
 
 function findWindowsSignTool() {
   const programFiles =
@@ -49,6 +55,7 @@ function findWindowsSignTool() {
 }
 
 mkdirSync(seaDirectory, { recursive: true });
+rmSync(outputDirectory, { recursive: true, force: true });
 mkdirSync(outputDirectory, { recursive: true });
 
 await build({
@@ -123,5 +130,14 @@ if (process.platform === "darwin") {
 cpSync(resolve(root, "dist/public"), resolve(outputDirectory, "public"), {
   recursive: true,
 });
+writeFileSync(
+  resolve(outputDirectory, "build-info.json"),
+  `${JSON.stringify({
+    version: packageInfo.version,
+    platform: process.platform,
+    architecture: process.arch,
+    nodeVersion: process.version,
+  }, null, 2)}\n`,
+);
 
 console.log(`Executable package created at ${outputDirectory}`);

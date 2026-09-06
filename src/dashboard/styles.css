@@ -253,6 +253,124 @@ select:focus-visible {
   cursor: pointer;
 }
 
+.command__links {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.about-panel {
+  width: min(900px, calc(100% - 48px));
+  margin: 24px auto;
+  padding: 24px;
+  color: var(--deep);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+
+.about-panel__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.about-panel h2 {
+  margin: 0;
+  font-size: 23px;
+}
+
+.about-panel h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.about-panel p {
+  max-width: 72ch;
+  margin: 12px 0;
+  line-height: 1.5;
+}
+
+.about-panel a:not(.button) {
+  color: var(--teal);
+  text-underline-offset: 3px;
+}
+
+.about-panel__facts {
+  display: grid;
+  gap: 8px;
+  margin: 24px 0;
+}
+
+.about-panel__facts > div {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 20px;
+}
+
+.about-panel__facts dt {
+  width: 175px;
+  color: var(--ink-muted);
+}
+
+.about-panel__facts dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.about-panel__actions,
+.about-panel__downloads {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.about-panel__downloads .button {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 15px;
+  text-decoration: none;
+}
+
+.about-panel__result:not(:empty) {
+  margin-top: 24px;
+}
+
+.about-panel__error {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.about-panel__upgrade {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.setup-screen .about-panel {
+  width: min(100%, 900px);
+  margin: 0;
+}
+
+.boot-screen .button {
+  margin-top: 24px;
+}
+
+@media (max-width: 720px) {
+  .about-panel {
+    width: calc(100% - 24px);
+    padding: 20px;
+  }
+
+  .about-panel__heading {
+    align-items: start;
+  }
+}
+
 .health strong {
   font-size: 13px;
 }

@@ -43,7 +43,7 @@ function requestedTemplate(): {
 }
 
 export function OverlayRuntime(): ReactNode {
-  const { state, socketStatus, animationEvents } =
+  const { state, socketStatus, animationEvents, upgradeRequired } =
     useTournamentSocket("overlay");
   const scale = useStageScale();
   const request = useMemo(requestedTemplate, []);
@@ -66,6 +66,9 @@ export function OverlayRuntime(): ReactNode {
   }
 
   if (state === null) {
+    if (upgradeRequired) {
+      return null;
+    }
     return (
       <div className="stage" style={style}>
         <div className="overlay-runtime-message">
@@ -79,7 +82,7 @@ export function OverlayRuntime(): ReactNode {
     <div className="stage" style={style}>
       <Suspense
         fallback={
-          <div className="overlay-runtime-message">Loading overlay design…</div>
+          upgradeRequired ? null : <div className="overlay-runtime-message">Loading overlay design…</div>
         }
       >
         <Template

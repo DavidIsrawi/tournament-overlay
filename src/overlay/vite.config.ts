@@ -2,13 +2,14 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { browserBuildInfo } from "../../scripts/browser-build-info.ts";
 
 const directory = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   base: "/overlay/",
   root: directory,
-  plugins: [react()],
+  plugins: [react(), browserBuildInfo()],
   build: {
     outDir: resolve(directory, "../../dist/public/overlay"),
     emptyOutDir: false,

@@ -34,6 +34,25 @@ async function take(service: TournamentService, setId = "group-1-a", eventId = "
 }
 
 describe("preview and broadcast separation", () => {
+  it("surfaces a failed state restore and blocks commands before they can mutate the scene", async () => {
+    const store = new MemoryOperatorStore();
+    vi.spyOn(store, "load").mockRejectedValue(new Error("Saved schema is newer than this application."));
+    const save = vi.spyOn(store, "save");
+    const service = create(fixtureProvider(), store);
+    await expect(service.initialize()).rejects.toThrow("Saved schema is newer");
+    expect(service.getState().connection).toMatchObject({
+      status: "error",
+    });
+    expect(service.getState().connection.message).toContain("No scene changes will be accepted");
+    const revision = service.getState().revision;
+    await expect(service.dispatch({ type: "presentation.swap" })).rejects.toThrow("Saved settings could not be restored");
+    expect(service.getState().revision).toBe(revision);
+    expect(service.getState().operator.presentation.sideOrder).toBe("normal");
+    expect(save).not.toHaveBeenCalled();
+    service.replaceProvider(fixtureProvider());
+    expect(service.getState().connection.message).toContain("No scene changes will be accepted");
+  });
+
   it("keeps OBS empty until Take live and preserves it across set, phase and event browsing", async () => {
     const service = create();
     await load(service);

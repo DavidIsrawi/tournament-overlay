@@ -11,18 +11,19 @@ import {
   PROTOCOL_VERSION,
   serverMessageSchema,
 } from "../src/shared/contracts.ts";
+import { APP_VERSION, appInfoSchema } from "../src/shared/app-info.ts";
 
 interface ExecutableProcess {
   readonly child: ChildProcessByStdio<null, Readable, Readable>;
   readonly getOutput: () => string;
 }
 
-const executablePath = resolve(
+const executablePath = process.env.EXECUTABLE_PATH === undefined ? resolve(
   "dist/executable",
   process.platform === "win32"
     ? "TournamentOverlay.exe"
     : "TournamentOverlay",
-);
+) : resolve(process.env.EXECUTABLE_PATH);
 
 async function findAvailablePort(): Promise<number> {
   const server = createServer();
@@ -114,6 +115,7 @@ async function readProviderConfiguration(
         socket.send(
           JSON.stringify({
             type: "client.hello",
+            appVersion: APP_VERSION,
             protocolVersion: PROTOCOL_VERSION,
             client: "dashboard",
           }),
@@ -179,6 +181,11 @@ let processState = launchExecutable(port, configFile, stateFile);
 
 try {
   await waitForServer(baseUrl, processState);
+  const appInfoResponse = await fetch(`${baseUrl}/api/app`);
+  const appInfo = appInfoSchema.parse(await appInfoResponse.json());
+  if (!appInfoResponse.ok || appInfo.version !== APP_VERSION || appInfo.protocolVersion !== PROTOCOL_VERSION) {
+    throw new Error("The executable did not expose the expected bundled application version.");
+  }
   for (const path of ["/", "/overlay/"]) {
     const response = await fetch(`${baseUrl}${path}`);
     if (!response.ok) {

@@ -199,6 +199,10 @@ The signature shape is a fitted plate with opposing asymmetric corners: usually 
   updates the preview; an **On air** label identifies the live set. Bracket
   and live-set freshness are shown separately, including on narrow screens.
 - **Round headers:** Deep Navy bars with compact labels and Chart Sand counts.
+- **About and updates:** A secondary command-bar action expands an inline Paper
+  section without hiding or interrupting the live controls. It shows installed
+  and dashboard versions, an explicit update check, platform-specific download
+  links, and safe-upgrade guidance. Failures remain local to this section.
 
 ## Do's and Don'ts
 

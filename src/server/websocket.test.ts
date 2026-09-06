@@ -11,6 +11,7 @@ import {
 import { buildApp } from "./app.ts";
 import { fixtureEvent, fixtureProvider, MemoryOperatorStore } from "./fixtures.test-support.ts";
 import { TournamentService } from "./service.ts";
+import { APP_VERSION } from "../shared/app-info.ts";
 
 const resources: { app: FastifyInstance; service: TournamentService; sockets: WebSocket[] }[] = [];
 
@@ -39,7 +40,7 @@ async function setup(provider: TournamentDataProvider = fixtureProvider()) {
       messages.push(serverMessageSchema.parse(JSON.parse(text)));
     });
     if (hello) {
-      socket.send(JSON.stringify({ type: "client.hello", protocolVersion: PROTOCOL_VERSION, client: "dashboard" }));
+      socket.send(JSON.stringify({ type: "client.hello", appVersion: APP_VERSION, protocolVersion: PROTOCOL_VERSION, client: "dashboard" }));
       await vi.waitFor(() => expect(messages[0]?.type).toBe("state.snapshot"));
     }
     const send = (commandId: string, command: ClientCommand): void => {
@@ -60,6 +61,33 @@ async function setup(provider: TournamentDataProvider = fixtureProvider()) {
 }
 
 describe("live WebSocket protocol", () => {
+  it.each([
+    { protocolVersion: PROTOCOL_VERSION - 1 },
+    { protocolVersion: PROTOCOL_VERSION, appVersion: "0.0.1" },
+    { protocolVersion: PROTOCOL_VERSION },
+  ])("rejects mismatched clients before sending state or accepting commands", async (version) => {
+    const { connect, service } = await setup();
+    const client = await connect(false);
+    const closed = new Promise<number>((resolve) => client.socket.once("close", resolve));
+    client.socket.send(JSON.stringify({ type: "client.hello", client: "dashboard", ...version }));
+    expect(await closed).toBe(4006);
+    expect(client.messages).toEqual([expect.objectContaining({
+      type: "command.error", code: "client_version_mismatch",
+    })]);
+    expect(client.messages.find((message) => message.type === "command.error")?.message).toContain("Reload this dashboard");
+    expect(service.getState().revision).toBe(0);
+  });
+
+  it("tells an old overlay client to refresh its OBS browser source", async () => {
+    const { connect } = await setup();
+    const client = await connect(false);
+    client.socket.send(JSON.stringify({ type: "client.hello", client: "overlay", protocolVersion: 5 }));
+    await vi.waitFor(() => expect(client.messages[0]).toMatchObject({
+      type: "command.error", code: "client_version_mismatch",
+    }));
+    expect(client.messages.find((message) => message.type === "command.error")?.message).toContain("Refresh this browser source in OBS");
+  });
+
   it("requires the current protocol hello before accepting a command", async () => {
     const { connect } = await setup();
     const client = await connect(false);

@@ -2,6 +2,7 @@ import { useTournamentSocket } from "../shared/browser-client.ts";
 import { BracketWorkspace } from "./components/BracketWorkspace.tsx";
 import { SceneRail } from "./components/SceneRail.tsx";
 import { TokenSetup } from "./components/TokenSetup.tsx";
+import { AboutUpdates } from "./components/AboutUpdates.tsx";
 import {
   connectionNotice,
   formatTime,
@@ -9,6 +10,7 @@ import {
 } from "./helpers.ts";
 import {
   useState,
+  useRef,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -18,11 +20,17 @@ function StatusDot({ tone }: { readonly tone: StatusTone }): ReactNode {
 }
 
 export function App(): ReactNode {
-  const { state, socketStatus, error, sendCommand, pendingCommands, dismissError } =
+  const { state, socketStatus, error, sendCommand, pendingCommands, dismissError, upgradeRequired } =
     useTournamentSocket("dashboard");
   const [providerInput, setProviderId] = useState<string | null>(null);
   const [eventDraft, setEventInput] = useState<string | null>(null);
   const [showTokenSetup, setShowTokenSetup] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
+  const aboutButton = useRef<HTMLButtonElement>(null);
+  const closeAbout = (): void => {
+    setShowAbout(false);
+    aboutButton.current?.focus();
+  };
   const providerId = providerInput ?? state?.operator.providerId ?? "startgg";
   const eventInput = eventDraft ?? state?.operator.eventInput ?? "";
   const connected = socketStatus === "connected";
@@ -33,14 +41,22 @@ export function App(): ReactNode {
     sendCommand({ type: "event.load", providerId, input: eventInput });
   };
 
-  if (state === null) {
+  if (state === null || upgradeRequired) {
     return (
       <div className="boot-screen">
         <div className="mini-helm" aria-hidden="true">
           TO
         </div>
-        <h1>Connecting to tournament server</h1>
+        <h1>{upgradeRequired ? "Application updated" : "Connecting to tournament server"}</h1>
         <p>{error ?? "Waiting for the first synchronized state snapshot…"}</p>
+        {upgradeRequired && (
+          <>
+            <p>After reloading the dashboard, refresh the OBS browser source as well.</p>
+            <button className="button button--load" type="button" onClick={() => window.location.reload()}>
+              Reload dashboard
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -50,11 +66,15 @@ export function App(): ReactNode {
   );
 
   if (!startGgProvider?.configured || showTokenSetup) {
+    if (showAbout) {
+      return <div className="setup-screen"><AboutUpdates onClose={closeAbout} /></div>;
+    }
     return (
       <TokenSetup
         canCancel={startGgProvider?.configured === true}
         onCancel={() => setShowTokenSetup(false)}
         onSaved={() => setShowTokenSetup(false)}
+        onAbout={() => setShowAbout(true)}
       />
     );
   }
@@ -119,15 +139,28 @@ export function App(): ReactNode {
               </small>
             </span>
           </div>
-          <button
-            className="token-settings"
-            type="button"
-            onClick={() => setShowTokenSetup(true)}
-          >
-            API token
-          </button>
+          <div className="command__links">
+            <button
+              className="token-settings"
+              type="button"
+              onClick={() => setShowTokenSetup(true)}
+            >
+              API token
+            </button>
+            <button
+              className="token-settings"
+              type="button"
+              ref={aboutButton}
+              aria-expanded={showAbout}
+              onClick={() => setShowAbout(!showAbout)}
+            >
+              About &amp; updates
+            </button>
+          </div>
         </div>
       </header>
+
+      {showAbout && <AboutUpdates onClose={closeAbout} />}
 
       {error !== null && (
         <div className="notice notice--error" role="alert">

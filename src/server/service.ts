@@ -20,6 +20,7 @@ import {
 import type { AtomicOperatorStateStore } from "./persistence.ts";
 import { StateHub, type StateListener } from "./state-hub.ts";
 import { canRetry, IDLE_CONNECTION, LiveScene, requestMessage, retryDelay } from "./live-scene.ts";
+import { APP_VERSION } from "../shared/app-info.ts";
 
 export const BRACKET_REFRESH_INTERVAL_MS = 60_000;
 
@@ -42,6 +43,7 @@ export class TournamentService {
   #liveSet: NormalizedSet | null = null;
   #saveQueue: Promise<void> = Promise.resolve();
   #operatorReady: Promise<void> = Promise.resolve();
+  #restoreError: Error | null = null;
   #pollTimer: NodeJS.Timeout | null = null;
   #pollGeneration = 0;
   #activeRequestController: AbortController | null = null;
@@ -61,6 +63,7 @@ export class TournamentService {
       failureCount: 0,
     };
     this.#hub = new StateHub({
+      appVersion: APP_VERSION,
       protocolVersion: PROTOCOL_VERSION,
       revision: 0,
       startedAt: new Date().toISOString(),
@@ -114,7 +117,11 @@ export class TournamentService {
     const current = this.getState();
     this.#commit({
       providers: this.providers.list(),
-      connection: {
+      connection: this.#restoreError !== null ? {
+        ...current.connection,
+        status: "error",
+        message: this.#restoreError.message,
+      } : {
         status: current.event === null ? "idle" : "stale",
         message:
           current.event === null
@@ -131,7 +138,19 @@ export class TournamentService {
     const restore = this.#restoreOperator();
     this.#operatorReady = restore.then(
       () => undefined,
-      () => undefined,
+      (error: unknown) => {
+        this.#restoreError = new Error(
+          `Saved settings could not be restored. No scene changes will be accepted. ${requestMessage(error)}`,
+          { cause: error },
+        );
+        this.#commit({
+          connection: {
+            ...IDLE_CONNECTION,
+            status: "error",
+            message: this.#restoreError.message,
+          },
+        });
+      },
     );
     return restore.then(async (operator) => {
       if (operator === null || this.#closed) {
@@ -167,7 +186,12 @@ export class TournamentService {
     if (this.#closed) {
       return Promise.reject(new Error("Tournament service is closed."));
     }
-    return this.#operatorReady.then(() => this.#dispatchCommand(command));
+    return this.#operatorReady.then(() => {
+      if (this.#restoreError !== null) {
+        throw this.#restoreError;
+      }
+      return this.#dispatchCommand(command);
+    });
   }
 
   async #dispatchCommand(command: ClientCommand): Promise<void> {

@@ -8,10 +8,12 @@ export function TokenSetup({
   canCancel,
   onCancel,
   onSaved,
+  onAbout,
 }: {
   readonly canCancel: boolean;
   readonly onCancel: () => void;
   readonly onSaved: () => void;
+  readonly onAbout: () => void;
 }): ReactNode {
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -118,6 +120,9 @@ export function TokenSetup({
           <output className="setup-panel__status" aria-live="polite">
             {status}
           </output>
+          <button className="button button--small button--quiet" type="button" onClick={onAbout}>
+            About &amp; updates
+          </button>
         </div>
       </section>
     </main>

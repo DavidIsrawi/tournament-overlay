@@ -5,7 +5,7 @@ import {
   type OverlayTemplateId,
 } from "./overlay-templates.ts";
 
-export const PROTOCOL_VERSION = 5 as const;
+export const PROTOCOL_VERSION = 6 as const;
 
 export type ProviderId = "startgg" | (string & {});
 
@@ -126,6 +126,7 @@ export interface ConnectionState {
 }
 
 export interface ServerState {
+  readonly appVersion: string;
   readonly protocolVersion: typeof PROTOCOL_VERSION;
   readonly revision: number;
   readonly startedAt: string;
@@ -230,6 +231,7 @@ export type ClientCommand = z.infer<typeof clientCommandSchema>;
 export const clientMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("client.hello"),
+    appVersion: z.string().min(1),
     protocolVersion: z.literal(PROTOCOL_VERSION),
     client: z.enum(["dashboard", "overlay"]),
   }),
@@ -355,6 +357,7 @@ const overlayViewSchema = z.object({
 });
 
 export const serverStateSchema = z.object({
+  appVersion: z.string().min(1),
   protocolVersion: z.literal(PROTOCOL_VERSION),
   revision: z.number().int().nonnegative(),
   startedAt: z.string(),
