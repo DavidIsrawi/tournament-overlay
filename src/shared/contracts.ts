@@ -4,8 +4,13 @@ import {
   OVERLAY_TEMPLATE_IDS,
   type OverlayTemplateId,
 } from "./overlay-templates.ts";
+import {
+  DEFAULT_OVERLAY_METADATA_FIELDS,
+  OVERLAY_METADATA_FIELDS,
+  type OverlayMetadataField,
+} from "./overlay-metadata.ts";
 
-export const PROTOCOL_VERSION = 6 as const;
+export const PROTOCOL_VERSION = 7 as const;
 
 export type ProviderId = "startgg" | (string & {});
 
@@ -69,6 +74,8 @@ export interface NormalizedEvent {
 export interface PresentationState {
   readonly sideOrder: "normal" | "swapped";
   readonly overlayTemplateId: OverlayTemplateId;
+  readonly metadataFields: readonly OverlayMetadataField[];
+  readonly overlayVisible: boolean;
 }
 
 export interface OperatorState {
@@ -77,6 +84,7 @@ export interface OperatorState {
   readonly selectedPhaseGroupId: string | null;
   readonly selectedSetId: string | null;
   readonly liveSelection: LiveSelection | null;
+  readonly previousLiveSelection: LiveSelection | null;
   readonly presentation: PresentationState;
 }
 
@@ -109,6 +117,7 @@ export interface OverlayView {
   readonly phaseName: string;
   readonly roundName: string;
   readonly players: readonly [OverlayPlayer | null, OverlayPlayer | null];
+  readonly metadataFields: readonly OverlayMetadataField[];
 }
 
 export interface ProviderDescriptor {
@@ -138,11 +147,17 @@ export interface ServerState {
   readonly overlay: OverlayView;
 }
 
+const metadataFieldsSchema = z.array(z.enum(OVERLAY_METADATA_FIELDS))
+  .max(2)
+  .refine((fields) => new Set(fields).size === fields.length, "Metadata fields must be unique.");
+
 export const presentationStateSchema = z.object({
   sideOrder: z.enum(["normal", "swapped"]),
   overlayTemplateId: z
     .enum(OVERLAY_TEMPLATE_IDS)
     .default(DEFAULT_OVERLAY_TEMPLATE_ID),
+  metadataFields: metadataFieldsSchema.default([...DEFAULT_OVERLAY_METADATA_FIELDS]),
+  overlayVisible: z.boolean().default(true),
 });
 
 const liveSelectionSchema = z.object({
@@ -158,6 +173,7 @@ export const operatorStateSchema = z.object({
   selectedPhaseGroupId: z.string().nullable(),
   selectedSetId: z.string().nullable(),
   liveSelection: liveSelectionSchema.nullable().optional(),
+  previousLiveSelection: liveSelectionSchema.nullable().default(null),
   presentation: presentationStateSchema,
 }).transform((operator): OperatorState => ({
   ...operator,
@@ -198,6 +214,20 @@ const takeLiveCommandSchema = z.object({
   setId: z.string().min(1),
 });
 
+const restoreLiveCommandSchema = z.object({
+  type: z.literal("live.restore"),
+});
+
+const overlayVisibilityCommandSchema = z.object({
+  type: z.literal("overlay.visibility"),
+  visible: z.boolean(),
+});
+
+const presentationMetadataCommandSchema = z.object({
+  type: z.literal("presentation.metadata"),
+  fields: metadataFieldsSchema,
+});
+
 const presentationSwapCommandSchema = z.object({
   type: z.literal("presentation.swap"),
 });
@@ -220,6 +250,9 @@ export const clientCommandSchema = z.discriminatedUnion("type", [
   phaseSelectCommandSchema,
   setSelectCommandSchema,
   takeLiveCommandSchema,
+  restoreLiveCommandSchema,
+  overlayVisibilityCommandSchema,
+  presentationMetadataCommandSchema,
   presentationSwapCommandSchema,
   presentationClearCommandSchema,
   overlaySelectCommandSchema,
@@ -354,6 +387,7 @@ const overlayViewSchema = z.object({
     overlayPlayerSchema.nullable(),
     overlayPlayerSchema.nullable(),
   ]),
+  metadataFields: metadataFieldsSchema,
 });
 
 export const serverStateSchema = z.object({
@@ -414,6 +448,7 @@ export function deriveOverlayView(
       phaseName: "",
       roundName: "",
       players: [null, null],
+      metadataFields: presentation.metadataFields,
     };
   }
 
@@ -453,6 +488,7 @@ export function deriveOverlayView(
     phaseName: set.phaseName,
     roundName: set.round.name,
     players,
+    metadataFields: presentation.metadataFields,
   };
 }
 

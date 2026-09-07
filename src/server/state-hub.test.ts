@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PROTOCOL_VERSION,
   deriveOverlayView,
+  presentationStateSchema,
   type ServerState,
 } from "../shared/contracts.ts";
 import { StateHub } from "./state-hub.ts";
@@ -27,10 +28,8 @@ function makeState(revision: number): ServerState {
       selectedPhaseGroupId: null,
       selectedSetId: null,
       liveSelection: null,
-      presentation: {
-        sideOrder: "normal",
-        overlayTemplateId: "octagon",
-      },
+      previousLiveSelection: null,
+      presentation: presentationStateSchema.parse({ sideOrder: "normal" }),
     },
     connection,
     liveConnection: connection,
@@ -39,7 +38,7 @@ function makeState(revision: number): ServerState {
       revision,
       null,
       null,
-      { sideOrder: "normal", overlayTemplateId: "octagon" },
+      presentationStateSchema.parse({ sideOrder: "normal" }),
       "idle",
     ),
   };

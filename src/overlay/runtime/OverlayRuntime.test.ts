@@ -96,3 +96,36 @@ describe("operator-only upgrade instructions", () => {
     expect(html).toContain("refresh the OBS browser source");
   });
 });
+
+describe("hidden broadcast output", () => {
+  it.each(OVERLAY_TEMPLATE_IDS)("renders no markup for a hidden %s scene, including when disconnected", async (templateId) => {
+    const state = retainedScene(templateId);
+    socketState({
+      ...state,
+      operator: {
+        ...state.operator,
+        presentation: { ...state.operator.presentation, overlayVisible: false },
+      },
+    }, false);
+    expect(await render(OverlayRuntime)).toBe("");
+  });
+
+  it("stays transparent even with an invalid pinned template or an upgrade notice", async () => {
+    vi.stubGlobal("window", { location: { search: "?template=invalid" } });
+    const state = retainedScene("octagon");
+    socketState({
+      ...state,
+      operator: {
+        ...state.operator,
+        presentation: { ...state.operator.presentation, overlayVisible: false },
+      },
+    }, true);
+    expect(await render(OverlayRuntime)).toBe("");
+  });
+
+  it("renders the retained scoreboard again when explicitly shown", async () => {
+    const state = retainedScene("minimal");
+    socketState(state, false);
+    expect(await render(OverlayRuntime)).toContain("match-one Player 1");
+  });
+});

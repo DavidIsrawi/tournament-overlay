@@ -8,28 +8,52 @@ import {
   type OperatorState,
 } from "../shared/contracts.ts";
 
-export const SAVED_STATE_SCHEMA_VERSION = 1;
+export const SAVED_STATE_SCHEMA_VERSION = 2;
+
+const schemaOneOperatorSchema = z.unknown().refine((value) =>
+  typeof value === "object" &&
+  value !== null &&
+  "liveSelection" in value &&
+  value.liveSelection !== undefined &&
+  "presentation" in value &&
+  typeof value.presentation === "object" &&
+  value.presentation !== null &&
+  "overlayTemplateId" in value.presentation &&
+  value.presentation.overlayTemplateId !== undefined,
+  "Versioned operator state must explicitly include liveSelection and presentation.overlayTemplateId.",
+);
+
+const currentOperatorSchema = schemaOneOperatorSchema.refine((value) =>
+  typeof value === "object" &&
+  value !== null &&
+  "previousLiveSelection" in value &&
+  value.previousLiveSelection !== undefined &&
+  "presentation" in value &&
+  typeof value.presentation === "object" &&
+  value.presentation !== null &&
+  "overlayVisible" in value.presentation &&
+  value.presentation.overlayVisible !== undefined &&
+  "metadataFields" in value.presentation &&
+  value.presentation.metadataFields !== undefined,
+  "Versioned operator state must explicitly include previousLiveSelection, presentation.overlayVisible and presentation.metadataFields.",
+).pipe(operatorStateSchema);
 
 const savedStateSchema = z.strictObject({
   schemaVersion: z.literal(SAVED_STATE_SCHEMA_VERSION),
   appVersion: z.string().trim().min(1),
-  // Legacy defaults must only run behind the backed-up schema-0 migration.
-  operator: z.unknown().refine((value) =>
-    typeof value === "object" &&
-    value !== null &&
-    "liveSelection" in value &&
-    "presentation" in value &&
-    typeof value.presentation === "object" &&
-    value.presentation !== null &&
-    "overlayTemplateId" in value.presentation,
-  "Versioned operator state must explicitly include liveSelection and presentation.overlayTemplateId.",
-  ).pipe(operatorStateSchema),
+  operator: currentOperatorSchema,
+});
+
+const schemaOneSavedStateSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  appVersion: z.string().trim().min(1),
+  operator: schemaOneOperatorSchema.pipe(operatorStateSchema),
 });
 
 interface SavedState {
   readonly content: Buffer;
   readonly operator: OperatorState;
-  readonly needsMigration: boolean;
+  readonly migrationFrom: 0 | 1 | null;
 }
 
 async function writePrivateFile(filePath: string, content: Buffer | string): Promise<void> {
@@ -56,8 +80,8 @@ export class AtomicOperatorStateStore {
     return this.serialize(async () => {
       try {
         const saved = await this.read();
-        if (saved?.needsMigration) {
-          await this.backup(saved.content);
+        if (saved !== null && saved.migrationFrom !== null) {
+          await this.backup(saved.content, saved.migrationFrom);
           await this.write(saved.operator);
         }
         this.loadFailure = null;
@@ -78,7 +102,7 @@ export class AtomicOperatorStateStore {
         );
       }
 
-      const parsed = operatorStateSchema.safeParse(state);
+      const parsed = currentOperatorSchema.safeParse(state);
       if (!parsed.success) {
         throw new Error(`Cannot save invalid operator state: ${parsed.error.message}`, {
           cause: parsed.error,
@@ -88,8 +112,8 @@ export class AtomicOperatorStateStore {
       // Inspect every save, including callers that have never loaded this store.
       try {
         const saved = await this.read();
-        if (saved?.needsMigration) {
-          await this.backup(saved.content);
+        if (saved !== null && saved.migrationFrom !== null) {
+          await this.backup(saved.content, saved.migrationFrom);
         }
       } catch (error) {
         this.loadFailure = { cause: error };
@@ -140,19 +164,19 @@ export class AtomicOperatorStateStore {
         ) {
           throw new Error("Persisted operator state has an invalid schemaVersion. The file was left unchanged.");
         }
-        if (value.schemaVersion !== SAVED_STATE_SCHEMA_VERSION) {
+        if (value.schemaVersion !== 1 && value.schemaVersion !== SAVED_STATE_SCHEMA_VERSION) {
           throw new Error(
             `Persisted operator state schema version ${String(value.schemaVersion)} is not supported by this application (supported: ${String(SAVED_STATE_SCHEMA_VERSION)}). Use a compatible application or restore a pre-migration backup; downgrades are not automatic. The file was left unchanged.`,
           );
         }
 
-        const parsed = savedStateSchema.safeParse(value);
+        const parsed = (value.schemaVersion === 1 ? schemaOneSavedStateSchema : savedStateSchema).safeParse(value);
         if (!parsed.success) {
           throw new Error(`Persisted operator state envelope is invalid: ${parsed.error.message}`, {
             cause: parsed.error,
           });
         }
-        return { content, operator: parsed.data.operator, needsMigration: false };
+        return { content, operator: parsed.data.operator, migrationFrom: value.schemaVersion === 1 ? 1 : null };
       }
 
       if ("operator" in value || "appVersion" in value) {
@@ -168,11 +192,11 @@ export class AtomicOperatorStateStore {
       );
     }
 
-    return { content, operator: parsed.data, needsMigration: true };
+    return { content, operator: parsed.data, migrationFrom: 0 };
   }
 
-  private async backup(content: Buffer): Promise<void> {
-    const backupPath = `${this.filePath}.schema-0.${String(Date.now())}.${randomUUID()}.bak`;
+  private async backup(content: Buffer, schemaVersion: 0 | 1): Promise<void> {
+    const backupPath = `${this.filePath}.schema-${String(schemaVersion)}.${String(Date.now())}.${randomUUID()}.bak`;
     await writePrivateFile(backupPath, content);
   }
 

@@ -55,6 +55,10 @@ export function OverlayRuntime(): ReactNode {
   );
   const style = { transform: `scale(${String(scale)})` };
 
+  if (state !== null && !state.operator.presentation.overlayVisible) {
+    return null;
+  }
+
   if (request.invalid !== null) {
     return (
       <div className="stage" style={style}>

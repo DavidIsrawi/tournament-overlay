@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveOverlayView,
+  clientCommandSchema,
   operatorStateSchema,
+  presentationStateSchema,
   type NormalizedEvent,
   type NormalizedSet,
 } from "./contracts.ts";
+import { DEFAULT_OVERLAY_METADATA_FIELDS, OVERLAY_METADATA_FIELDS } from "./overlay-metadata.ts";
 
 const set: NormalizedSet = {
   id: "set-1",
@@ -68,7 +71,7 @@ describe("deriveOverlayView", () => {
       4,
       event,
       set,
-      { sideOrder: "swapped", overlayTemplateId: "octagon" },
+      presentationStateSchema.parse({ sideOrder: "swapped" }),
       "fresh",
     );
 
@@ -90,6 +93,9 @@ describe("deriveOverlayView", () => {
     });
 
     expect(parsed.presentation.overlayTemplateId).toBe("octagon");
+    expect(parsed.presentation.metadataFields).toEqual(DEFAULT_OVERLAY_METADATA_FIELDS);
+    expect(parsed.presentation.overlayVisible).toBe(true);
+    expect(parsed.previousLiveSelection).toBeNull();
   });
 
   it("migrates legacy live selections but preserves an explicit empty live scene", () => {
@@ -107,5 +113,54 @@ describe("deriveOverlayView", () => {
       setId: "set-1",
     });
     expect(operatorStateSchema.parse({ ...legacy, liveSelection: null }).liveSelection).toBeNull();
+  });
+});
+
+describe("live presentation contracts", () => {
+  it.each([
+    [],
+    ...OVERLAY_METADATA_FIELDS.map((field) => [field]),
+    ["country", "social"],
+    ["pronouns", "seed"],
+  ].map((fields) => ({ fields })))("accepts an ordered selection of up to two metadata fields: %j", ({ fields }) => {
+    const command = { type: "presentation.metadata", fields };
+    expect(clientCommandSchema.parse(command)).toEqual(command);
+  });
+
+  it.each([
+    { fields: ["seed", "seed"] },
+    { fields: ["seed", "pronouns", "country"] },
+    { fields: ["location"] },
+    { fields: ["SEED"] },
+    { fields: null },
+    { fields: "seed" },
+    {},
+  ])("rejects invalid metadata commands and persisted fields: %j", (input) => {
+    expect(clientCommandSchema.safeParse({ type: "presentation.metadata", ...input }).success).toBe(false);
+    if ("fields" in input) {
+      expect(presentationStateSchema.safeParse({ sideOrder: "normal", metadataFields: input.fields }).success).toBe(false);
+    }
+  });
+
+  it("keeps an explicit empty metadata selection and hidden presentation", () => {
+    const presentation = presentationStateSchema.parse({
+      sideOrder: "normal",
+      metadataFields: [],
+      overlayVisible: false,
+    });
+    expect(presentation.metadataFields).toEqual([]);
+    expect(presentation.overlayVisible).toBe(false);
+    expect(deriveOverlayView(1, event, set, presentation, "fresh").metadataFields).toEqual([]);
+    const configured = { ...presentation, metadataFields: ["country", "social"] as const };
+    expect(deriveOverlayView(2, event, set, configured, "fresh").metadataFields).toEqual(["country", "social"]);
+    expect(deriveOverlayView(3, null, null, configured, "idle").metadataFields).toEqual(["country", "social"]);
+  });
+
+  it("validates hide, show and previous-live commands", () => {
+    expect(clientCommandSchema.parse({ type: "live.restore" })).toEqual({ type: "live.restore" });
+    for (const visible of [true, false]) {
+      expect(clientCommandSchema.parse({ type: "overlay.visibility", visible })).toEqual({ type: "overlay.visibility", visible });
+    }
+    expect(clientCommandSchema.safeParse({ type: "overlay.visibility", visible: "false" }).success).toBe(false);
   });
 });

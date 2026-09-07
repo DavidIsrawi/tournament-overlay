@@ -11,6 +11,7 @@ import {
 import {
   useState,
   useRef,
+  useEffect,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -26,6 +27,12 @@ export function App(): ReactNode {
   const [eventDraft, setEventInput] = useState<string | null>(null);
   const [showTokenSetup, setShowTokenSetup] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showEventSetup, setShowEventSetup] = useState(false);
+  useEffect(() => {
+    if (state?.event?.id !== undefined) {
+      setShowEventSetup(false);
+    }
+  }, [state?.event?.id]);
   const aboutButton = useRef<HTMLButtonElement>(null);
   const closeAbout = (): void => {
     setShowAbout(false);
@@ -92,7 +99,7 @@ export function App(): ReactNode {
           </span>
         </a>
 
-        <form className="event-loader" onSubmit={submit}>
+        {(state.event === null || showEventSetup) && <form id="event-setup" className="event-loader" onSubmit={submit}>
           <label>
             <span>Provider</span>
             <select
@@ -123,7 +130,7 @@ export function App(): ReactNode {
           >
             {pending("event.load") ? "Loading…" : "Load event"}
           </button>
-        </form>
+        </form>}
 
         <div className="command__status">
           <div className="health" aria-live="polite">
@@ -139,6 +146,16 @@ export function App(): ReactNode {
               </small>
             </span>
           </div>
+          <button
+            className="button button--small button--load"
+            type="button"
+            aria-expanded={state.event === null || showEventSetup}
+            aria-controls="event-setup"
+            disabled={state.event === null}
+            onClick={() => setShowEventSetup(!showEventSetup)}
+          >
+            {showEventSetup ? "Close event setup" : "Change event"}
+          </button>
           <div className="command__links">
             <button
               className="token-settings"
@@ -162,16 +179,6 @@ export function App(): ReactNode {
 
       {showAbout && <AboutUpdates onClose={closeAbout} />}
 
-      {error !== null && (
-        <div className="notice notice--error" role="alert">
-          <StatusDot tone="bad" />
-          <span><strong>Action needs attention</strong><small>{error}</small></span>
-          <button className="button button--small" type="button" onClick={dismissError}>
-            Dismiss
-          </button>
-        </div>
-      )}
-
       {notice !== null && (
         <div className={`notice notice--${notice.variant}`} role="status">
           <StatusDot tone={notice.tone} />
@@ -191,6 +198,15 @@ export function App(): ReactNode {
           )}
         </div>
       )}
+
+      <SceneRail
+        state={state}
+        send={sendCommand}
+        connected={connected}
+        pendingCommands={pendingCommands}
+        error={error}
+        dismissError={dismissError}
+      />
 
       <nav className="phase-tabs" aria-label="Phase groups">
         <span>Phase groups</span>
@@ -229,7 +245,6 @@ export function App(): ReactNode {
 
       <div className="workspace">
         <BracketWorkspace state={state} send={sendCommand} disabled={!connected || pending("set.select")} />
-        <SceneRail state={state} send={sendCommand} connected={connected} pendingCommands={pendingCommands} />
       </div>
     </div>
   );

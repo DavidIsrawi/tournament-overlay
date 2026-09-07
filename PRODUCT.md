@@ -22,6 +22,12 @@ One normalized scene powers both an information-dense operator surface and a bro
 
 The server, dashboard, and OBS browser source run on one operator machine. Operators browse phase groups and rounds, preview a set, explicitly take it live, monitor bracket and live-set freshness independently, adjust presentation side order, and leave the overlay URL open in OBS. Browsing never replaces the on-air set.
 
+Live output and the next set remain visible in a sticky broadcast desk while
+the bracket scrolls. Immediate presentation controls are explicitly labeled.
+Operators can hide output without losing the current set and safely restore
+the previous live selection. Octagon prioritizes complete names, scores, and
+round context over optional player details.
+
 ## Capabilities and Constraints
 
 - StartGG integration uses only the official GraphQL API and is read-only.
