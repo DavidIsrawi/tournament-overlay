@@ -43,6 +43,7 @@ interface LiveSceneSnapshot {
   readonly set: NormalizedSet | null;
   readonly selection: LiveSelection | null;
   readonly connection: ConnectionState;
+  readonly taken: boolean;
 }
 
 // Browsing must never cancel, replace, or determine the freshness of this scene.
@@ -62,39 +63,108 @@ export class LiveScene {
     private readonly publish: (scene: LiveSceneSnapshot) => void,
   ) {}
 
-  public async take(event: NormalizedEvent, setId: string): Promise<void> {
-    if (this.#closed) {
-      throw new Error("The live scene is closed.");
-    }
-    const controller = new AbortController();
-    this.#takeController?.abort();
-    this.#takeController = controller;
+  public take(event: NormalizedEvent, setId: string): Promise<void> {
+    return this.#takeScene(async (signal) => {
+      const set = await this.providers.get(event.providerId).loadSet(setId, event, { signal });
+      signal.throwIfAborted();
+      this.#validateSet(set, setId, findSet(event, setId)?.phaseGroupId);
+      return { event, set };
+    });
+  }
+
+  public takeSelection(selection: LiveSelection): Promise<void> {
+    return this.#takeScene((signal) => this.#loadSelection(selection, signal));
+  }
+
+  async #takeScene(
+    load: (signal: AbortSignal) => Promise<{ event: NormalizedEvent; set: NormalizedSet }>,
+  ): Promise<void> {
+    const controller = this.#beginTake();
+    const cancellation = Promise.withResolvers<never>();
+    const onAbort = (): void => { cancellation.reject(controller.signal.reason); };
+    controller.signal.addEventListener("abort", onAbort, { once: true });
     try {
-      const set = await this.providers.get(event.providerId).loadSet(setId, event, {
-        signal: controller.signal,
-      });
+      // Finish the command promptly even if a provider ignores cancellation.
+      // Loading cannot publish; only this guarded continuation may replace air.
+      const { event, set } = await Promise.race([load(controller.signal), cancellation.promise]);
       controller.signal.throwIfAborted();
-      if (set.id !== setId) {
-        throw new ProviderError("invalid_response", "The provider returned a different set.");
-      }
-      this.#cancelPoll();
-      this.#event = event;
-      this.#set = set;
-      this.#selection = {
-        providerId: event.providerId,
-        eventInput: event.slug,
-        phaseGroupId: set.phaseGroupId,
-        setId,
-      };
-      this.#markFresh();
-      this.#schedule(this.interval);
+      this.#acceptTake(event, set);
+    } catch (error) {
+      controller.signal.throwIfAborted();
+      throw error;
     } finally {
+      controller.signal.removeEventListener("abort", onAbort);
       if (this.#takeController === controller) {
         this.#takeController = null;
       }
     }
   }
 
+  public cancelTake(): void {
+    this.#takeController?.abort(new DOMException("The request was superseded.", "AbortError"));
+    this.#takeController = null;
+  }
+
+  #beginTake(): AbortController {
+    if (this.#closed) {
+      throw new Error("The live scene is closed.");
+    }
+    this.cancelTake();
+    const controller = new AbortController();
+    this.#takeController = controller;
+    return controller;
+  }
+
+  #acceptTake(event: NormalizedEvent, set: NormalizedSet): void {
+    this.#cancelPoll();
+    this.#event = event;
+    this.#set = set;
+    this.#selection = {
+      providerId: event.providerId,
+      eventInput: event.slug,
+      phaseGroupId: set.phaseGroupId,
+      setId: set.id,
+    };
+    this.#markFresh(true);
+    this.#schedule(this.interval);
+  }
+
+  async #loadSelection(
+    selection: LiveSelection,
+    signal: AbortSignal,
+  ): Promise<{ event: NormalizedEvent; set: NormalizedSet }> {
+    const provider = this.providers.get(selection.providerId);
+    let event = await provider.loadEvent(selection.eventInput, { signal });
+    signal.throwIfAborted();
+    const group = event.phaseGroups.find((candidate) => candidate.id === selection.phaseGroupId);
+    if (group === undefined) {
+      throw new ProviderError("phase_group_not_found", "The saved live phase group is no longer available.");
+    }
+    const sets = await provider.loadPhaseGroupSets(group.id, group.phaseName, { signal });
+    signal.throwIfAborted();
+    event = {
+      ...event,
+      phaseGroups: event.phaseGroups.map((candidate) => candidate.id === group.id
+        ? { ...candidate, sets, setsLoaded: true, setsFetchedAt: new Date().toISOString() }
+        : candidate),
+    };
+    if (findSet(event, selection.setId) === null) {
+      throw new ProviderError("set_not_found", "The saved live set is no longer available.");
+    }
+    const set = await provider.loadSet(selection.setId, event, { signal });
+    signal.throwIfAborted();
+    this.#validateSet(set, selection.setId, selection.phaseGroupId);
+    return { event, set };
+  }
+
+  #validateSet(set: NormalizedSet, setId: string, phaseGroupId?: string): void {
+    if (set.id !== setId || (phaseGroupId !== undefined && set.phaseGroupId !== phaseGroupId)) {
+      throw new ProviderError("invalid_response", "The provider returned a different set.");
+    }
+  }
+
+  // Startup recovery may publish the saved selection before loading; operator
+  // restores use takeSelection instead so a failed request cannot replace air.
   public async restore(selection: LiveSelection): Promise<void> {
     if (this.#closed) {
       return;
@@ -106,23 +176,7 @@ export class LiveScene {
     this.#connection = { ...this.#connection, status: "loading", nextPollAt: null };
     this.#emit();
     try {
-      const provider = this.providers.get(selection.providerId);
-      let event = await provider.loadEvent(selection.eventInput, { signal: controller.signal });
-      const group = event.phaseGroups.find((candidate) => candidate.id === selection.phaseGroupId);
-      if (group === undefined) {
-        throw new ProviderError("phase_group_not_found", "The saved live phase group is no longer available.");
-      }
-      const sets = await provider.loadPhaseGroupSets(group.id, group.phaseName, { signal: controller.signal });
-      event = {
-        ...event,
-        phaseGroups: event.phaseGroups.map((candidate) => candidate.id === group.id
-          ? { ...candidate, sets, setsLoaded: true, setsFetchedAt: new Date().toISOString() }
-          : candidate),
-      };
-      if (findSet(event, selection.setId) === null) {
-        throw new ProviderError("set_not_found", "The saved live set is no longer available.");
-      }
-      const set = await provider.loadSet(selection.setId, event, { signal: controller.signal });
+      const { event, set } = await this.#loadSelection(selection, controller.signal);
       controller.signal.throwIfAborted();
       this.#event = event;
       this.#set = set;
@@ -141,8 +195,7 @@ export class LiveScene {
   }
 
   public refresh(): void {
-    this.#takeController?.abort();
-    this.#takeController = null;
+    this.cancelTake();
     if (!this.#closed && this.#selection !== null) {
       this.#cancelPoll();
       this.#schedule(0);
@@ -152,20 +205,20 @@ export class LiveScene {
   public close(): void {
     this.#closed = true;
     this.#cancelPoll();
-    this.#takeController?.abort();
-    this.#takeController = null;
+    this.cancelTake();
   }
 
-  #emit(): void {
+  #emit(taken = false): void {
     this.publish({
       event: this.#event,
       set: this.#set,
       selection: this.#selection,
       connection: this.#connection,
+      taken,
     });
   }
 
-  #markFresh(): void {
+  #markFresh(taken = false): void {
     this.#connection = {
       status: "fresh",
       message: null,
@@ -173,7 +226,7 @@ export class LiveScene {
       nextPollAt: new Date(Date.now() + this.interval).toISOString(),
       failureCount: 0,
     };
-    this.#emit();
+    this.#emit(taken);
   }
 
   #failed(error: unknown): void {
@@ -238,6 +291,7 @@ export class LiveScene {
         { signal: controller.signal },
       );
       controller.signal.throwIfAborted();
+      this.#validateSet(set, selection.setId, selection.phaseGroupId);
       this.#set = set;
       this.#markFresh();
       this.#schedule(this.interval);

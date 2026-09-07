@@ -125,6 +125,58 @@ describe("live WebSocket protocol", () => {
     });
   });
 
+  it("synchronizes persisted hide, metadata and previous-live restoration with reconnecting overlays", async () => {
+    const { connect } = await setup();
+    const dashboard = await connect();
+    for (const [id, command] of [
+      ["load", { type: "event.load", providerId: "startgg", input: fixtureEvent().slug }],
+      ["first", { type: "live.take", eventId: "event-1", setId: "group-1-a" }],
+      ["second", { type: "live.take", eventId: "event-1", setId: "group-1-b" }],
+      ["metadata", { type: "presentation.metadata", fields: ["country", "social"] }],
+      ["hide", { type: "overlay.visibility", visible: false }],
+    ] satisfies [string, ClientCommand][]) {
+      dashboard.send(id, command);
+      expect(await dashboard.completion(id)).toMatchObject({ type: "command.ack" });
+    }
+    const overlay = await connect();
+    expect(overlay.messages[0]).toMatchObject({
+      type: "state.snapshot",
+      state: {
+        operator: {
+          presentation: { overlayVisible: false, metadataFields: ["country", "social"] },
+          previousLiveSelection: { setId: "group-1-a" },
+        },
+        overlay: { setId: "group-1-b", metadataFields: ["country", "social"] },
+      },
+    });
+    dashboard.send("restore", { type: "live.restore" });
+    dashboard.send("restore", { type: "live.restore" });
+    expect(await dashboard.completion("restore")).toMatchObject({ type: "command.ack" });
+    await vi.waitFor(() => expect(overlay.messages.at(-1)).toMatchObject({
+      type: "state.snapshot",
+      state: {
+        operator: { presentation: { overlayVisible: true }, previousLiveSelection: { setId: "group-1-b" } },
+        overlay: { setId: "group-1-a" },
+      },
+    }));
+  });
+
+  it("returns command_superseded promptly when hide cancels a provider that ignores abort", async () => {
+    const { connect, service } = await setup({
+      ...fixtureProvider(),
+      loadSet: () => new Promise(() => {}),
+    });
+    const client = await connect();
+    client.send("load", { type: "event.load", providerId: "startgg", input: fixtureEvent().slug });
+    await client.completion("load");
+    client.send("pending", { type: "live.take", eventId: "event-1", setId: "group-1-a" });
+    client.send("hide", { type: "overlay.visibility", visible: false });
+    expect(await client.completion("hide")).toMatchObject({ type: "command.ack" });
+    expect(await client.completion("pending")).toMatchObject({ type: "command.error", code: "command_superseded" });
+    expect(service.getState().operator.presentation.overlayVisible).toBe(false);
+    expect(service.getState().overlay.setId).toBeNull();
+  });
+
   it("returns a correlated error rather than an acknowledgment for failed provider loads", async () => {
     const { connect } = await setup({
       ...fixtureProvider(),

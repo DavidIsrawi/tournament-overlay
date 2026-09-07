@@ -2,7 +2,7 @@ import type {
   OverlayPlayer,
   OverlayView,
 } from "../../../shared/contracts.ts";
-import { countryFlagEmoji } from "../../../shared/country-flags.ts";
+import type { OverlayMetadataField } from "../../../shared/overlay-metadata.ts";
 import type {
   OverlayAnimationEvent,
   OverlaySide,
@@ -10,6 +10,8 @@ import type {
 } from "../../../shared/overlay-events.ts";
 import { overlayFreshnessLabel } from "../../helpers.ts";
 import type { OverlayTemplateProps } from "../../types.ts";
+import { PlayerMetadata, PlayerName } from "./PlayerDetails.tsx";
+import { abbreviateRoundName } from "./readability.ts";
 import {
   useScoreboardAnimations,
   type ScorePulse,
@@ -88,79 +90,28 @@ function Score({
   );
 }
 
-function Chip({
-  children,
-  label,
-}: {
-  readonly children: ReactNode;
-  readonly label: string;
-}): ReactNode {
-  return (
-    <span className="chip">
-      <b>{label}</b>
-      {children}
-    </span>
-  );
-}
-
 function PlayerPlate({
   player,
   side,
   scoreEvent,
+  metadataFields,
 }: {
   readonly player: OverlayPlayer | null;
   readonly side: OverlaySide;
   readonly scoreEvent: ScoreAnimationEvent | undefined;
+  readonly metadataFields: readonly OverlayMetadataField[];
 }): ReactNode {
-  const flag = countryFlagEmoji(player?.country ?? null);
-  const chips: ReactNode[] = [
-    player?.seed === null || player?.seed === undefined ? null : (
-      <Chip key="seed" label="Seed">
-        {player.seed}
-      </Chip>
-    ),
-    player?.social === null || player?.social === undefined ? null : (
-      <Chip key="social" label="@">
-        {player.social.replace(/^@/, "")}
-      </Chip>
-    ),
-    player?.pronouns === null || player?.pronouns === undefined ? null : (
-      <Chip key="pronouns" label="Pronouns">
-        {player.pronouns}
-      </Chip>
-    ),
-    player === null || (player.location === null && flag === null) ? null : (
-      <Chip key="location" label="From">
-        {flag === null ? null : (
-          <span
-            className="chip-flag"
-            role="img"
-            aria-label={`${player.country ?? "Country"} flag`}
-          >
-            {flag}
-          </span>
-        )}
-        {player.location ?? null}
-      </Chip>
-    ),
-  ];
-
   return (
     <section className={`player player-${side}`}>
       <div className="player-plate">
-        <div className="player-name">
-          {player?.prefix === null || player?.prefix === undefined ? null : (
-            <span>{player.prefix}</span>
-          )}
-          <strong>{player?.displayName ?? "TBD"}</strong>
-        </div>
+        <PlayerName name={player?.displayName ?? "TBD"} prefix={player?.prefix ?? null} />
         <Score
           value={player?.score ?? null}
           side={side}
           event={scoreEvent}
         />
       </div>
-      <div className="chips">{chips}</div>
+      <PlayerMetadata player={player} fields={metadataFields} />
     </section>
   );
 }
@@ -237,7 +188,9 @@ function MatchPlate({ view }: { readonly view: OverlayView }): ReactNode {
           <circle cx="32" cy="10" r="7" />
           <path d="M32 17v38M18 29h28M12 43c2 15 10 22 20 22s18-7 20-22M12 43l-7 9M12 43l10 2M52 43l7 9M52 43l-10 2" />
         </svg>
-        <strong>{view.roundName || "Waiting for set"}</strong>
+        <strong title={view.roundName || undefined}>
+          {abbreviateRoundName(view.roundName) || "Waiting for set"}
+        </strong>
         <span>{view.phaseName || "Operator dashboard"}</span>
       </div>
       <svg
@@ -283,11 +236,13 @@ function Scoreboard({
         player={view.players[0]}
         side="port"
         scoreEvent={portScoreEvent}
+        metadataFields={view.metadataFields}
       />
       <PlayerPlate
         player={view.players[1]}
         side="starboard"
         scoreEvent={starboardScoreEvent}
+        metadataFields={view.metadataFields}
       />
       <Helm
         turn={wheel.turn}

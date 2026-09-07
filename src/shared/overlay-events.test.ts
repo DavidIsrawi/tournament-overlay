@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OverlayPlayer, OverlayView } from "./contracts.ts";
 import { deriveOverlayAnimationEvents } from "./overlay-events.ts";
+import { DEFAULT_OVERLAY_METADATA_FIELDS } from "./overlay-metadata.ts";
 
 function player(id: string, score: number | null): OverlayPlayer {
   return {
@@ -30,6 +31,7 @@ function view(
     phaseName: "Top 8",
     roundName: "Winners Final",
     players,
+    metadataFields: DEFAULT_OVERLAY_METADATA_FIELDS,
   };
 }
 

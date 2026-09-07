@@ -8,6 +8,7 @@ import {
   type NormalizedPhaseGroup,
   type NormalizedSet,
   type OperatorState,
+  type PresentationState,
   type ProviderId,
   type ServerState,
 } from "../shared/contracts.ts";
@@ -21,6 +22,7 @@ import type { AtomicOperatorStateStore } from "./persistence.ts";
 import { StateHub, type StateListener } from "./state-hub.ts";
 import { canRetry, IDLE_CONNECTION, LiveScene, requestMessage, retryDelay } from "./live-scene.ts";
 import { APP_VERSION } from "../shared/app-info.ts";
+import { DEFAULT_OVERLAY_METADATA_FIELDS } from "../shared/overlay-metadata.ts";
 
 export const BRACKET_REFRESH_INTERVAL_MS = 60_000;
 
@@ -30,9 +32,12 @@ const DEFAULT_OPERATOR_STATE: OperatorState = {
   selectedPhaseGroupId: null,
   selectedSetId: null,
   liveSelection: null,
+  previousLiveSelection: null,
   presentation: {
     sideOrder: "normal",
     overlayTemplateId: "octagon",
+    metadataFields: DEFAULT_OVERLAY_METADATA_FIELDS,
+    overlayVisible: true,
   },
 };
 
@@ -81,9 +86,18 @@ export class TournamentService {
       ),
     });
     this.#live = new LiveScene(providers, pollIntervalMs, (scene) => {
+      const previousEvent = this.#liveEvent;
       this.#liveEvent = scene.event;
       this.#liveSet = scene.set;
       const current = this.getState();
+      const previous = current.operator.liveSelection;
+      const changed = scene.taken && scene.selection !== null &&
+        (previous === null ||
+          previous.providerId !== scene.selection.providerId ||
+          (previousEvent === null
+            ? previous.eventInput !== scene.selection.eventInput
+            : previousEvent.id !== scene.event?.id) ||
+          previous.setId !== scene.selection.setId);
       const event = scene.set !== null && current.event !== null &&
         current.event?.id === scene.event?.id &&
         current.event?.providerId === scene.event?.providerId
@@ -91,7 +105,14 @@ export class TournamentService {
         : current.event;
       this.#commit({
         event,
-        operator: { ...current.operator, liveSelection: scene.selection },
+        operator: {
+          ...current.operator,
+          liveSelection: scene.selection,
+          previousLiveSelection: changed ? previous : current.operator.previousLiveSelection,
+          presentation: scene.taken
+            ? { ...current.operator.presentation, overlayVisible: true }
+            : current.operator.presentation,
+        },
         liveConnection: scene.connection,
       });
     });
@@ -174,7 +195,13 @@ export class TournamentService {
     }
     const operator = this.providers.has(persistedOperator.providerId)
       ? persistedOperator
-      : DEFAULT_OPERATOR_STATE;
+      : {
+          ...persistedOperator,
+          providerId: DEFAULT_OPERATOR_STATE.providerId,
+          eventInput: "",
+          selectedPhaseGroupId: null,
+          selectedSetId: null,
+        };
     this.#commit({ operator });
     if (operator !== persistedOperator) {
       await this.store.save(operator);
@@ -218,18 +245,40 @@ export class TournamentService {
         await this.#saveOperator(this.getState().operator);
         break;
       }
+      case "live.restore": {
+        const selection = this.getState().operator.previousLiveSelection;
+        if (selection === null) {
+          throw new ProviderError("set_not_found", "There is no previous live set to restore.");
+        }
+        await this.#live.takeSelection(selection);
+        await this.#saveOperator(this.getState().operator);
+        break;
+      }
+      case "overlay.visibility":
+        if (command.visible) {
+          if (this.#liveSet === null || this.getState().operator.liveSelection === null) {
+            throw new ProviderError("set_not_found", "Take a valid set live before showing the overlay.");
+          }
+        } else {
+          this.#live.cancelTake();
+        }
+        await this.#updatePresentation({ overlayVisible: command.visible });
+        break;
+      case "presentation.metadata":
+        await this.#updatePresentation({ metadataFields: command.fields });
+        break;
       case "presentation.swap":
-        await this.#updatePresentation(
-          this.getState().operator.presentation.sideOrder === "normal"
+        await this.#updatePresentation({
+          sideOrder: this.getState().operator.presentation.sideOrder === "normal"
             ? "swapped"
             : "normal",
-        );
+        });
         break;
       case "presentation.clear":
-        await this.#updatePresentation("normal");
+        await this.#updatePresentation({ sideOrder: "normal" });
         break;
       case "overlay.select":
-        await this.#selectOverlayTemplate(command.templateId);
+        await this.#updatePresentation({ overlayTemplateId: command.templateId });
         break;
       case "refresh":
         this.#live.refresh();
@@ -541,29 +590,14 @@ export class TournamentService {
   }
 
   async #updatePresentation(
-    sideOrder: OperatorState["presentation"]["sideOrder"],
+    patch: Partial<PresentationState>,
   ): Promise<void> {
     const state = this.getState();
     const operator: OperatorState = {
       ...state.operator,
       presentation: {
         ...state.operator.presentation,
-        sideOrder,
-      },
-    };
-    this.#commit({ operator });
-    await this.#saveOperator(operator);
-  }
-
-  async #selectOverlayTemplate(
-    overlayTemplateId: OperatorState["presentation"]["overlayTemplateId"],
-  ): Promise<void> {
-    const state = this.getState();
-    const operator: OperatorState = {
-      ...state.operator,
-      presentation: {
-        ...state.operator.presentation,
-        overlayTemplateId,
+        ...patch,
       },
     };
     this.#commit({ operator });

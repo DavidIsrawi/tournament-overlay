@@ -17,12 +17,14 @@ function SetCard({
   set,
   selected,
   live,
+  liveVisible,
   disabled,
   onSelect,
 }: {
   readonly set: NormalizedSet;
   readonly selected: boolean;
   readonly live: boolean;
+  readonly liveVisible: boolean;
   readonly disabled: boolean;
   readonly onSelect: () => void;
 }): ReactNode {
@@ -36,7 +38,7 @@ function SetCard({
     >
       <span className="set-card__topline">
         <span>{set.identifier}</span>
-        <span>{live ? "On air" : set.state}</span>
+        <span>{live ? (liveVisible ? "On air" : "Hidden") : set.state}</span>
       </span>
       {set.entrants.map((slot, index) => (
         <span className="set-card__entrant" key={slot?.entrant.id ?? index}>
@@ -90,7 +92,7 @@ export function BracketWorkspace({
       <div className="bracket__tools">
         <div>
           <h1>{group?.phaseName ?? "Bracket"}</h1>
-          <p>Select a set to preview. Only Take live changes the broadcast.</p>
+          <p>Select a set for Preview. Take live puts it on air.</p>
           <p>
             {group === undefined
               ? "Load an event to browse its phase groups."
@@ -157,6 +159,7 @@ export function BracketWorkspace({
                     live={state.operator.liveSelection?.providerId === state.event?.providerId &&
                       state.operator.liveSelection?.eventInput === state.event?.slug &&
                       state.overlay.setId === set.id}
+                    liveVisible={state.operator.presentation.overlayVisible}
                     disabled={disabled}
                     onSelect={() => send({ type: "set.select", setId: set.id })}
                   />

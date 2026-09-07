@@ -142,13 +142,30 @@ The palette feels like a night-blue chart case opened over warm event paperwork,
 - **Body** (500, `15px`, `1.4`): controls, bracket detail, and explanatory copy.
 - **Label** (900, `10-11px`, `0.07-0.09em`, uppercase): phase, round, connection, and set status.
 
-**The Player Name Rule.** Player names receive the strongest type weight; seed, pronoun, location, and social metadata must truncate before the name becomes unreadable.
+**The Player Name Rule.** Player names receive the strongest type weight. Sponsor
+prefixes shrink or disappear before names are shortened. Octagon shows at most
+two selected metadata fields; missing or oversized details are omitted whole,
+not clipped. Common round names use deliberate broadcast abbreviations, with
+wrapping for unfamiliar names instead of an ellipsis.
 
 ## Layout
 
-The desktop dashboard begins with a sticky three-part command bar, then a phase strip, followed by a flexible bracket workspace and a fixed 336px scene rail. Rounds stack vertically in chronological order with clear navy headers; sets wrap into a dense responsive grid within each round so wheel, trackpad, keyboard, and touch navigation all follow the page's natural vertical axis. The 8px spacing rhythm tightens to 4px only inside tabs and telemetry.
+The dashboard begins with a compact application header and collapsible event
+setup, followed by a sticky full-width broadcast desk. Live output and the next
+set sit side by side, above the phase strip and full-width bracket. Rounds stack
+vertically in chronological order with clear navy headers; sets wrap into a dense
+responsive grid so wheel, trackpad, keyboard, and touch follow the natural page
+axis. A disclosure beneath the desk contains immediate live actions, design and
+metadata settings, and OBS setup.
 
-Below 1080px the scene rail moves beneath the bracket. Below 720px the command bar wraps, controls become single-column, and each round's set grid collapses to one column while preserving chronological DOM order.
+Below 1080px the desk's buttons move below their player names, not below the
+bracket. Live and next-set context stays side by side on narrow screens, with
+wrapping player names and persistent Take live and Hide/Show controls. Below
+720px the header wraps and each round's set grid becomes one column. Expanded
+setup controls scroll within a bounded area so primary controls remain available.
+On viewports at most 600px tall, the whole broadcast desk becomes one
+viewport-bounded scroll area instead. This keeps the last setup controls
+reachable without trapping them beneath an independently scrolling panel.
 
 The overlay owns a transparent 1920x1080 canvas and keeps all artwork in the upper broadcast-safe band. It scales the complete stage proportionally to the browser source rather than reflowing individual plates.
 
@@ -192,12 +209,14 @@ The signature shape is a fitted plate with opposing asymmetric corners: usually 
 ### Cards / Containers
 
 - **Set cards:** warm paper, subtle fleck material, left state rail, and asymmetric corners. Selected cards add a purple outline; completed cards use teal on the state rail.
-- **Scene rail:** Raised Navy with a restrained diagonal fabric/paint texture.
-- **Preview and live scene:** The rail separates the preview from the on-air
-  scene with a brass rule. A full-width Chart Sand **Take live** action fetches
-  current set data before replacing the broadcast. Set-card selection only
-  updates the preview; an **On air** label identifies the live set. Bracket
-  and live-set freshness are shown separately, including on narrow screens.
+- **Broadcast desk:** Raised Navy with a restrained diagonal texture and brass
+  bottom edge. Live output comes first, separated from Next set by a quiet rule.
+- **Preview and live scene:** Chart Sand **Take live** fetches current data before
+  replacing the output. Set-card selection only updates Preview; **On air**,
+  **Hidden**, and **Disconnected** labels make output state explicit. Hide/Show
+  is a secondary action, while Restore previous remains in Live controls.
+  Immediate side, design, and metadata changes are labeled **Applies live**.
+  Bracket and live-set freshness are shown separately on every screen size.
 - **Round headers:** Deep Navy bars with compact labels and Chart Sand counts.
 - **About and updates:** A secondary command-bar action expands an inline Paper
   section without hiding or interrupting the live controls. It shows installed
@@ -210,7 +229,7 @@ The signature shape is a fitted plate with opposing asymmetric corners: usually 
 
 - **Do** preserve chronological round order in a vertically scannable flow on every screen size.
 - **Do** keep connection and freshness state visible, textual, and timestamped.
-- **Do** truncate long metadata before player names or scores collide.
+- **Do** omit oversized optional metadata before player names or scores collide.
 - **Do** honor `prefers-reduced-motion` for score, helm, and set transitions.
 - **Do** reserve the richer nautical material treatment for set cards, the scene rail, and the overlay.
 

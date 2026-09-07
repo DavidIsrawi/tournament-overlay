@@ -54,7 +54,26 @@ Open:
 Browsing sets, phases, or another event never replaces the live scoreboard.
 **Take live** fetches the latest set details before switching; a failed fetch
 leaves the previous scene on air. Side swaps and overlay-design changes apply
-to the live output immediately.
+to the live output immediately and are labeled **Applies live**.
+
+The **Live output / Next set** desk stays above the bracket while you scroll,
+including on narrow screens. Event loading collapses after setup; open
+**Change event** to browse another event without replacing the live set.
+**Live controls & setup** contains presentation settings and the OBS URL.
+On short windows, the broadcast desk scrolls as one viewport-bounded area so
+every setup control remains reachable. On taller windows, primary controls
+remain visible above the separately scrolling settings.
+
+- **Hide overlay** makes the OBS source transparent without discarding the live
+  set or stopping score updates. **Show overlay** reveals the current scoreboard.
+- **Restore previous live set** fetches the previous selection before putting it
+  back on air. Failed restores leave the current output unchanged.
+- **Take live** and a successful restore reveal the scoreboard. Hiding the
+  overlay cancels an in-flight take or restore so it cannot unexpectedly reappear.
+  If output is already hidden, **Cancel transition** keeps it hidden.
+- Octagon displays up to two selected player details: seed, pronouns, country,
+  or social handle. The default is seed and pronouns. Missing details and details
+  that cannot fit are omitted as a whole, never shown as clipped fragments.
 
 The setup screen stores the token in the current user's local configuration
 directory with owner-only file permissions. It is read only by the server and
@@ -173,10 +192,12 @@ them outside any installation directory you replace.
 Saved operator state uses a versioned format. A migration backs up the original
 file before rewriting it, and unknown newer formats are rejected rather than
 overwritten. The current envelope is
-`{ "schemaVersion": 1, "appVersion": "...", "operator": { ... } }`.
-Unversioned files migrate as schema 0, preserving their previous live selection.
-Their exact original bytes are backed up beside the state file as
-`operator-state.json.schema-0.<timestamp-ms>.<uuid>.bak`, with owner-only
+`{ "schemaVersion": 2, "appVersion": "...", "operator": { ... } }`.
+Unversioned files (schema 0) and schema-1 files migrate with their existing
+selections preserved. New fields default to visible output, seed/pronoun details,
+and no previous-live history. Their exact original bytes are backed up beside
+the state file as `operator-state.json.schema-0.<timestamp-ms>.<uuid>.bak` or
+`operator-state.json.schema-1.<timestamp-ms>.<uuid>.bak`, with owner-only
 permissions. Backups are not automatically deleted; loading an already-current
 format does not create another backup just because the app version changed.
 If settings cannot be loaded, the dashboard reports the failure
@@ -219,7 +240,7 @@ version flag to run every check without changing or pushing anything.
 4. Set width to `1920` and height to `1080`.
 5. Enable **Refresh browser when scene becomes active** if desired.
 
-The page background is transparent. The overlay reconnects automatically and receives a complete snapshot after reconnecting; it never contacts StartGG directly. Choose **Octagon** or **Minimal** from the dashboard's live-scene rail and the existing OBS source switches immediately. To pin a source to one design, add `?template=octagon` or `?template=minimal` to its URL.
+The page background is transparent. The overlay reconnects automatically and receives a complete snapshot after reconnecting; it never contacts StartGG directly. Choose **Octagon** or **Minimal** under **Live controls & setup** and the existing OBS source switches immediately. To pin a source to one design, add `?template=octagon` or `?template=minimal` to its URL. Hide/show applies to both designs, including pinned sources.
 
 ## Architecture
 
@@ -236,17 +257,17 @@ The server is the single authority. A provider returns normalized immutable sour
 
 Operator choices are persisted atomically to `operator-state.json` in the
 current user's configuration directory, or the path specified by `STATE_FILE`.
-The file contains separate preview and live provider/event/phase/set selections
-and presentation choices only; it never contains credentials. Both selections
-restore independently after restart. Older saved selections migrate to the live
-scene they represented before preview/live separation.
+The file contains separate preview and live provider/event/phase/set selections,
+the previous live selection, and presentation choices (including visibility and
+metadata fields); it never contains credentials. Preview and live selections
+restore independently after restart, and hidden output stays hidden.
 
 ### Live protocol
 
 Clients connect to `/ws` and identify themselves:
 
 ```json
-{"type":"client.hello","appVersion":"<installed package version>","protocolVersion":6,"client":"dashboard"}
+{"type":"client.hello","appVersion":"<installed package version>","protocolVersion":7,"client":"dashboard"}
 ```
 
 The server answers with the complete current state:
@@ -280,6 +301,10 @@ operation may already have changed the live scene.
 
 `set.select` changes only the preview. To broadcast it, send
 `{"type":"live.take","eventId":"<current-event-id>","setId":"<preview-set-id>"}`.
+Use `{"type":"overlay.visibility","visible":false}` to hide output, or
+`{"type":"live.restore"}` to fetch and restore the previous live selection.
+`{"type":"presentation.metadata","fields":["seed","pronouns"]}` selects up to
+two distinct Octagon detail fields; the other choices are `country` and `social`.
 The state carries separate `connection` (bracket) and `liveConnection`
 (broadcast set) freshness. All messages are validated against the shared Zod
 contracts. Reconnect uses bounded exponential delay and always resynchronizes

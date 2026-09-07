@@ -4,7 +4,8 @@ import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "nod
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { APP_VERSION } from "../shared/app-info.ts";
-import { operatorStateSchema, type OperatorState } from "../shared/contracts.ts";
+import { operatorStateSchema, presentationStateSchema, type OperatorState } from "../shared/contracts.ts";
+import { DEFAULT_OVERLAY_METADATA_FIELDS } from "../shared/overlay-metadata.ts";
 import { AtomicOperatorStateStore, SAVED_STATE_SCHEMA_VERSION } from "./persistence.ts";
 
 vi.mock("node:fs/promises", { spy: true });
@@ -23,6 +24,8 @@ const legacyState = {
 };
 const state: OperatorState = {
   ...legacyState,
+  presentation: presentationStateSchema.parse(legacyState.presentation),
+  previousLiveSelection: null,
   liveSelection: {
     providerId: "startgg",
     eventInput: "genesis-9/event/melee-singles",
@@ -88,6 +91,7 @@ describe("AtomicOperatorStateStore", () => {
       ...state,
       selectedSetId: null,
       presentation: {
+        ...state.presentation,
         sideOrder: "normal",
         overlayTemplateId: "octagon",
       },
@@ -186,6 +190,8 @@ describe("AtomicOperatorStateStore", () => {
     expect(restored.presentation).toEqual({
       sideOrder: "normal",
       overlayTemplateId: "octagon",
+      metadataFields: DEFAULT_OVERLAY_METADATA_FIELDS,
+      overlayVisible: true,
     });
     expect(restored.liveSelection).toEqual(state.liveSelection);
     expect(await readFile(join(directory, (await backups(directory))[0]!), "utf8")).toBe(original);
@@ -215,6 +221,99 @@ describe("AtomicOperatorStateStore", () => {
     await store.save(state);
     expect(JSON.parse(await readFile(filePath, "utf8"))).toEqual(envelope());
     expect(await backups(directory)).toEqual([]);
+  });
+
+  it("backs up schema 1 before adding explicit live-safety and metadata defaults", async () => {
+    const { store, filePath, directory } = await createStore();
+    const original = Buffer.from(` \r\n${JSON.stringify({
+      schemaVersion: 1,
+      appVersion: "0.3.0",
+      operator: { ...legacyState, liveSelection: null },
+    }, null, "\t")}\r\n`);
+    await writeFile(filePath, original);
+    const expected = { ...state, liveSelection: null };
+
+    await expect(store.load(state)).resolves.toEqual(expected);
+    const names = await backups(directory);
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/^state\.json\.schema-1\.\d+\.[\da-f-]+\.bak$/);
+    expect(await readFile(join(directory, names[0]!))).toEqual(original);
+    await expectPrivate(join(directory, names[0]!));
+    expect(JSON.parse(await readFile(filePath, "utf8"))).toEqual(envelope(expected));
+    await expect(new AtomicOperatorStateStore(filePath).load(state)).resolves.toEqual(expected);
+    expect(await backups(directory)).toEqual(names);
+  });
+
+  it.each([0, 1, SAVED_STATE_SCHEMA_VERSION])(
+    "preserves explicit hidden state, metadata and history from schema %i",
+    async (schemaVersion) => {
+      const { store, filePath, directory } = await createStore();
+      const operator: OperatorState = {
+        ...state,
+        previousLiveSelection: { ...state.liveSelection!, setId: "previous-set" },
+        presentation: { ...state.presentation, overlayVisible: false, metadataFields: [] },
+      };
+      const original = JSON.stringify(schemaVersion === 0
+        ? operator
+        : { ...envelope(operator), schemaVersion });
+      await writeFile(filePath, original);
+
+      await expect(store.load(state)).resolves.toEqual(operator);
+      await store.save(operator);
+      await expect(new AtomicOperatorStateStore(filePath).load(state)).resolves.toEqual(operator);
+      const names = await backups(directory);
+      expect(names).toHaveLength(schemaVersion === SAVED_STATE_SCHEMA_VERSION ? 0 : 1);
+      if (names[0] !== undefined) {
+        expect(await readFile(join(directory, names[0]), "utf8")).toBe(original);
+      }
+    },
+  );
+
+  it("backs up schema 1 even when the first operation is save", async () => {
+    const { store, filePath, directory } = await createStore();
+    const original = Buffer.from(JSON.stringify({
+      schemaVersion: 1,
+      appVersion: "0.3.0",
+      operator: { ...legacyState, liveSelection: state.liveSelection },
+    }));
+    await writeFile(filePath, original);
+    await store.save(state);
+
+    const names = await backups(directory);
+    expect(names).toHaveLength(1);
+    expect(names[0]).toContain(".schema-1.");
+    expect(await readFile(join(directory, names[0]!))).toEqual(original);
+    expect(JSON.parse(await readFile(filePath, "utf8"))).toEqual(envelope());
+  });
+
+  it("leaves schema 1 unchanged and blocks writes when its migration backup fails", async () => {
+    const { store, filePath, directory } = await createStore();
+    const original = JSON.stringify({ ...envelope(), schemaVersion: 1 });
+    await writeFile(filePath, original);
+    vi.mocked(open).mockRejectedValueOnce(new Error("Backup denied"));
+
+    await expect(store.load(state)).rejects.toThrow("Backup denied");
+    await expect(store.save(state)).rejects.toThrow("after a failed restore");
+    expect(await readFile(filePath, "utf8")).toBe(original);
+    expect(await readdir(directory)).toEqual(["state.json"]);
+  });
+
+  it.each([
+    { ...legacyState, liveSelection: state.liveSelection },
+    { ...state, presentation: { sideOrder: "normal", overlayTemplateId: "octagon" } },
+    { ...state, presentation: { ...legacyState.presentation, overlayVisible: false } },
+    { ...state, presentation: { ...legacyState.presentation, metadataFields: [] } },
+    { ...state, presentation: { ...state.presentation, metadataFields: ["seed", "seed"] } },
+    { ...state, presentation: { ...state.presentation, metadataFields: ["seed", "social", "country"] } },
+    { ...state, presentation: { ...state.presentation, overlayVisible: "false" } },
+  ])("rejects schema 2 with missing or invalid live-safety configuration: %j", async (operator) => {
+    const { store, filePath, directory } = await createStore();
+    const original = JSON.stringify({ ...envelope(), operator });
+    await writeFile(filePath, original);
+    await expect(store.load(state)).rejects.toThrow("Persisted operator state envelope is invalid");
+    await expect(store.save(state)).rejects.toThrow("after a failed restore");
+    expect(await readFile(filePath, "utf8")).toBe(original);
+    expect(await readdir(directory)).toEqual(["state.json"]);
   });
 
   it.each([
@@ -278,7 +377,7 @@ describe("AtomicOperatorStateStore", () => {
     },
   );
 
-  it.each([0, -1, 2, 999])(
+  it.each([0, -1, SAVED_STATE_SCHEMA_VERSION + 1, 999])(
     "rejects unknown schema %i before validating an operator, and prevents save",
     async (schemaVersion) => {
       const { store, filePath, directory } = await createStore();
@@ -300,7 +399,7 @@ describe("AtomicOperatorStateStore", () => {
   );
 
   it.each([
-    JSON.stringify({ ...envelope(), schemaVersion: 2 }),
+    JSON.stringify({ ...envelope(), schemaVersion: SAVED_STATE_SCHEMA_VERSION + 1 }),
     "{broken",
     JSON.stringify({ ...legacyState, schemaVersion: "1" }),
   ])("inspects existing data before save without a preceding load: %s", async (original) => {
@@ -317,10 +416,10 @@ describe("AtomicOperatorStateStore", () => {
     const { store, filePath } = await createStore();
     await store.save(state);
     await store.load(state);
-    const original = JSON.stringify({ ...envelope(), schemaVersion: 2 });
+    const original = JSON.stringify({ ...envelope(), schemaVersion: SAVED_STATE_SCHEMA_VERSION + 1 });
     await writeFile(filePath, original);
 
-    await expect(store.save(state)).rejects.toThrow("schema version 2 is not supported");
+    await expect(store.save(state)).rejects.toThrow(`schema version ${String(SAVED_STATE_SCHEMA_VERSION + 1)} is not supported`);
     expect(await readFile(filePath, "utf8")).toBe(original);
   });
 
@@ -338,7 +437,7 @@ describe("AtomicOperatorStateStore", () => {
 
   it("allows saving after a compatible backup is restored and explicitly loaded", async () => {
     const { store, filePath, directory } = await createStore();
-    await writeFile(filePath, JSON.stringify({ ...envelope(), schemaVersion: 2 }));
+    await writeFile(filePath, JSON.stringify({ ...envelope(), schemaVersion: SAVED_STATE_SCHEMA_VERSION + 1 }));
     await expect(store.load(state)).rejects.toThrow("is not supported");
     await writeFile(filePath, JSON.stringify(legacyState));
 
@@ -534,7 +633,7 @@ describe("AtomicOperatorStateStore", () => {
 
   it("serializes a failed restore ahead of a simultaneous save", async () => {
     const { store, filePath, directory } = await createStore();
-    const original = JSON.stringify({ ...envelope(), schemaVersion: 2 });
+    const original = JSON.stringify({ ...envelope(), schemaVersion: SAVED_STATE_SCHEMA_VERSION + 1 });
     await writeFile(filePath, original);
 
     const results = await Promise.allSettled([store.load(state), store.save(state)]);
