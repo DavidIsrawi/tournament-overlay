@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { APP_VERSION } from "../shared/app-info.ts";
 import {
   operatorStateSchema,
   type OperatorState,
 } from "../shared/contracts.ts";
+import { replacePrivateFile, writePrivateFile } from "./atomic-file.ts";
+import { OperationQueue } from "./operation-queue.ts";
 
 export const SAVED_STATE_SCHEMA_VERSION = 2;
 
@@ -56,28 +57,14 @@ interface SavedState {
   readonly migrationFrom: 0 | 1 | null;
 }
 
-async function writePrivateFile(filePath: string, content: Buffer | string): Promise<void> {
-  const file = await open(filePath, "wx", 0o600);
-  try {
-    await file.writeFile(content);
-    await file.sync();
-    await file.close();
-  } catch (error) {
-    // Cleanup is best-effort; the original write/sync/close failure must win.
-    await file.close().catch(() => {});
-    await rm(filePath, { force: true }).catch(() => {});
-    throw error;
-  }
-}
-
 export class AtomicOperatorStateStore {
   private loadFailure: { readonly cause: unknown } | null = null;
-  private pending: Promise<void> = Promise.resolve();
+  readonly #queue = new OperationQueue();
 
   public constructor(private readonly filePath: string) {}
 
   public load(defaultState: OperatorState): Promise<OperatorState> {
-    return this.serialize(async () => {
+    return this.#queue.run(async () => {
       try {
         const saved = await this.read();
         if (saved !== null && saved.migrationFrom !== null) {
@@ -94,7 +81,7 @@ export class AtomicOperatorStateStore {
   }
 
   public save(state: OperatorState): Promise<void> {
-    return this.serialize(async () => {
+    return this.#queue.run(async () => {
       if (this.loadFailure !== null) {
         throw new Error(
           "Cannot save operator state after a failed restore. Restore a compatible saved-state file and load it successfully before saving.",
@@ -122,13 +109,6 @@ export class AtomicOperatorStateStore {
 
       await this.write(parsed.data);
     });
-  }
-
-  private serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.pending.then(operation);
-    // Keep the queue usable after an error without changing the caller's result.
-    this.pending = result.then(() => {}, () => {});
-    return result;
   }
 
   private async read(): Promise<SavedState | null> {
@@ -200,19 +180,11 @@ export class AtomicOperatorStateStore {
     await writePrivateFile(backupPath, content);
   }
 
-  private async write(state: OperatorState): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true, mode: 0o700 });
-    const temporaryPath = `${this.filePath}.${randomUUID()}.tmp`;
-    await writePrivateFile(temporaryPath, `${JSON.stringify({
+  private write(state: OperatorState): Promise<void> {
+    return replacePrivateFile(this.filePath, `${JSON.stringify({
       schemaVersion: SAVED_STATE_SCHEMA_VERSION,
       appVersion: APP_VERSION,
       operator: state,
     }, null, 2)}\n`);
-    try {
-      await rename(temporaryPath, this.filePath);
-    } catch (error) {
-      await rm(temporaryPath, { force: true }).catch(() => {});
-      throw error;
-    }
   }
 }

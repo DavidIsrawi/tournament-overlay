@@ -11,6 +11,7 @@ import {
 } from "./local-config.ts";
 import { AtomicOperatorStateStore } from "./persistence.ts";
 import { TournamentService } from "./service.ts";
+import { startServer } from "./startup.ts";
 
 const environmentSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(3100),
@@ -61,56 +62,56 @@ async function main(): Promise<void> {
     new AtomicOperatorStateStore(stateFile),
     environment.POLL_INTERVAL_MS,
   );
-  const app = await buildApp(service, publicDirectory, {
-    saveStartGgToken: async (token) => {
-      await localConfigStore.saveStartGgToken(token);
-      service.replaceProvider(new StartGgProvider(token));
+  const server = await startServer({
+    service,
+    port: environment.PORT,
+    createApp: () => buildApp(service, publicDirectory, {
+      saveStartGgToken: async (token) => {
+        await localConfigStore.saveStartGgToken(token);
+        service.replaceProvider(new StartGgProvider(token));
+      },
+    }),
+    onReady: (app) => {
+      const dashboardUrl = `http://127.0.0.1:${String(environment.PORT)}/`;
+      app.log.info(
+        { dashboardUrl, configFile, stateFile },
+        "Tournament Overlay is ready",
+      );
+
+      if (environment.OPEN_BROWSER ?? executableMode) {
+        const command =
+          process.platform === "darwin"
+            ? { file: "open", arguments: [dashboardUrl] }
+            : process.platform === "win32"
+              ? {
+                  file: "cmd.exe",
+                  arguments: ["/d", "/s", "/c", `start "" "${dashboardUrl}"`],
+                }
+              : { file: "xdg-open", arguments: [dashboardUrl] };
+        const browser = spawn(command.file, command.arguments, {
+          detached: true,
+          stdio: "ignore",
+        });
+        browser.once("error", (error) => {
+          app.log.warn(
+            error,
+            "Could not open the dashboard in the default browser",
+          );
+        });
+        browser.unref();
+      }
     },
   });
-  void service.initialize().catch((error: unknown) => {
-    app.log.error(error, "Failed to initialize persisted operator state");
-  });
-  await app.listen({ host: "127.0.0.1", port: environment.PORT });
-  const dashboardUrl = `http://127.0.0.1:${String(environment.PORT)}/`;
-  app.log.info(
-    { dashboardUrl, configFile, stateFile },
-    "Tournament Overlay is ready",
-  );
 
-  if (environment.OPEN_BROWSER ?? executableMode) {
-    const command =
-      process.platform === "darwin"
-        ? { file: "open", arguments: [dashboardUrl] }
-        : process.platform === "win32"
-          ? {
-              file: "cmd.exe",
-              arguments: ["/d", "/s", "/c", `start "" "${dashboardUrl}"`],
-            }
-          : { file: "xdg-open", arguments: [dashboardUrl] };
-    const browser = spawn(command.file, command.arguments, {
-      detached: true,
-      stdio: "ignore",
+  const shutdown = (): void => {
+    void server.close().catch((error: unknown) => {
+      server.app.log.error(error, "Failed to shut down Tournament Overlay");
+      process.exitCode = 1;
     });
-    browser.once("error", (error) => {
-      app.log.warn(
-        error,
-        "Could not open the dashboard in the default browser",
-      );
-    });
-    browser.unref();
-  }
-
-  const shutdown = async (): Promise<void> => {
-    service.close();
-    await app.close();
   };
 
-  process.once("SIGINT", () => {
-    void shutdown();
-  });
-  process.once("SIGTERM", () => {
-    void shutdown();
-  });
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 void main().catch((error: unknown) => {
