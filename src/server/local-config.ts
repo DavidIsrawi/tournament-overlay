@@ -1,7 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, posix, win32 } from "node:path";
+import { posix, win32 } from "node:path";
 import { z } from "zod";
+import { replacePrivateFile } from "./atomic-file.ts";
+import { OperationQueue } from "./operation-queue.ts";
 
 const localConfigSchema = z.object({
   startggApiToken: z.string().trim().min(1).nullable(),
@@ -51,9 +53,15 @@ export function defaultUserConfigDirectory(
 }
 
 export class AtomicLocalConfigStore {
+  readonly #queue = new OperationQueue();
+
   public constructor(private readonly filePath: string) {}
 
-  public async load(): Promise<LocalConfig> {
+  public load(): Promise<LocalConfig> {
+    return this.#queue.run(() => this.#read());
+  }
+
+  async #read(): Promise<LocalConfig> {
     let content: string;
     try {
       content = await readFile(this.filePath, "utf8");
@@ -82,16 +90,10 @@ export class AtomicLocalConfigStore {
     return parsed.data;
   }
 
-  public async saveStartGgToken(token: string): Promise<void> {
-    const config: LocalConfig = {
-      startggApiToken: token.trim(),
-    };
-    await mkdir(dirname(this.filePath), { recursive: true, mode: 0o700 });
-    const temporaryPath = `${this.filePath}.${String(process.pid)}.${String(Date.now())}.tmp`;
-    await writeFile(temporaryPath, `${JSON.stringify(config, null, 2)}\n`, {
-      encoding: "utf8",
-      mode: 0o600,
+  public saveStartGgToken(token: string): Promise<void> {
+    return this.#queue.run(async () => {
+      const config = localConfigSchema.parse({ startggApiToken: token });
+      await replacePrivateFile(this.filePath, `${JSON.stringify(config, null, 2)}\n`);
     });
-    await rename(temporaryPath, this.filePath);
   }
 }

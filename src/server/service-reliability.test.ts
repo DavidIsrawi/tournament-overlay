@@ -34,6 +34,36 @@ async function take(service: TournamentService, setId = "group-1-a", eventId = "
 }
 
 describe("preview and broadcast separation", () => {
+  it("preserves newer navigation and live controls while an older selection waits for persistence", async () => {
+    const store = new MemoryOperatorStore();
+    const service = create(fixtureProvider(), store);
+    await load(service);
+    await take(service);
+    await service.dispatch({ type: "phase.select", phaseGroupId: "group-2" });
+    const writing = Promise.withResolvers<void>();
+    const save = store.save.bind(store);
+    vi.spyOn(store, "save").mockImplementationOnce(async (operator) => {
+      await writing.promise;
+      await save(operator);
+    });
+    const selecting = service.dispatch({ type: "set.select", setId: "group-1-b" });
+    const cancelled = expect(selecting).rejects.toMatchObject({ name: "AbortError" });
+    await vi.advanceTimersByTimeAsync(0);
+    const newerPhase = service.dispatch({ type: "phase.select", phaseGroupId: "group-2" });
+    const hidden = service.dispatch({ type: "overlay.visibility", visible: false });
+    const swapped = service.dispatch({ type: "presentation.swap" });
+    await vi.advanceTimersByTimeAsync(0);
+    writing.resolve();
+    await Promise.all([cancelled, newerPhase, hidden, swapped]);
+    expect(service.getState().operator).toMatchObject({
+      selectedPhaseGroupId: "group-2",
+      selectedSetId: "group-2-a",
+      liveSelection: { setId: "group-1-a" },
+      presentation: { overlayVisible: false, sideOrder: "swapped" },
+    });
+    expect(store.state).toEqual(service.getState().operator);
+  });
+
   it("surfaces a failed state restore and blocks commands before they can mutate the scene", async () => {
     const store = new MemoryOperatorStore();
     vi.spyOn(store, "load").mockRejectedValue(new Error("Saved schema is newer than this application."));

@@ -255,12 +255,27 @@ src/
 
 The server is the single authority. A provider returns normalized immutable source data. Local `PresentationState` separately records selected sides and safe overrides. `deriveOverlayView` combines them into the stable provider-neutral contract broadcast to both clients. Swapping sides therefore cannot mutate entrant or set data.
 
+`TournamentService` coordinates commands, saved operator state, and publication.
+`BracketController` owns preview loading, pagination, cache refresh, and request
+cancellation through a narrow state interface that cannot change live selections
+or presentation. `LiveScene` independently owns broadcast transitions and polling.
+Pure bracket-data helpers merge provider results without mutating cached data.
+Both controllers share provider recovery rules; all snapshots still come from
+the same `StateHub`.
+
 Operator choices are persisted atomically to `operator-state.json` in the
 current user's configuration directory, or the path specified by `STATE_FILE`.
 The file contains separate preview and live provider/event/phase/set selections,
 the previous live selection, and presentation choices (including visibility and
 metadata fields); it never contains credentials. Preview and live selections
 restore independently after restart, and hidden output stays hidden.
+
+Operator and credential stores share private atomic-write helpers: exclusively
+created temporary files, owner-only permissions, a file sync before replacement,
+and cleanup on failure. Each store serializes its operations so concurrent
+requests cannot race on its saved file. The server binds its listening port
+before restoring operator state or starting polling; a failed startup closes
+its allocated resources instead of leaving a second background poller running.
 
 ### Live protocol
 
