@@ -65,7 +65,7 @@ const
   InvalidFileAttributes = $FFFFFFFF;
 
 function CreateFileW(FileName: string; DesiredAccess, ShareMode: LongWord;
-  SecurityAttributes: NativeUInt; CreationDisposition, Flags: LongWord;
+  SecurityAttributes: LongWord; CreationDisposition, Flags: LongWord;
   TemplateFile: THandle): THandle;
   external 'CreateFileW@kernel32.dll stdcall';
 function CloseHandle(Handle: THandle): BOOL;

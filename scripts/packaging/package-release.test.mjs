@@ -215,6 +215,13 @@ describe("native and portable packaging", () => {
     expect(installer).not.toContain("{userappdata}");
   });
 
+  it("uses an Inno Setup 6-compatible type for the null security attributes pointer", () => {
+    const installer = readFileSync(resolve(import.meta.dirname, "windows.iss"), "utf8");
+    expect(installer).toContain("SecurityAttributes: LongWord;");
+    expect(installer).toContain("CreateFileW(Executable, GenericReadWrite, 0, 0, OpenExisting,");
+    expect(installer).not.toMatch(/\bNativeUInt\b/);
+  });
+
   it("fails rather than leaving unresolved template metadata", () => {
     expect(() => renderTemplate("Info.plist", { VERSION: "0.3.0" })).toThrow("ARCHITECTURE");
   });
