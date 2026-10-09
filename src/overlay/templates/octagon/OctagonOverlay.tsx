@@ -251,9 +251,12 @@ function Scoreboard({
         pulse={pulse}
       />
       <div className="event-plate">
-        <span>{view.tournamentName || "Tournament Overlay"}</span>
-        <i aria-hidden="true" />
-        <strong>{view.eventName || "No event loaded"}</strong>
+        <span title={view.tournamentName || undefined}>
+          {view.tournamentName || "Tournament Overlay"}
+        </span>
+        <strong title={view.eventName || undefined}>
+          {view.eventName || "No event loaded"}
+        </strong>
       </div>
       {freshness !== null && (
         <div className="freshness">

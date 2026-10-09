@@ -96,6 +96,7 @@ describe("deriveOverlayView", () => {
     expect(parsed.presentation.metadataFields).toEqual(DEFAULT_OVERLAY_METADATA_FIELDS);
     expect(parsed.presentation.overlayVisible).toBe(true);
     expect(parsed.previousLiveSelection).toBeNull();
+    expect(parsed.autoTakeEnabled).toBe(false);
   });
 
   it("migrates legacy live selections but preserves an explicit empty live scene", () => {
@@ -162,5 +163,14 @@ describe("live presentation contracts", () => {
       expect(clientCommandSchema.parse({ type: "overlay.visibility", visible })).toEqual({ type: "overlay.visibility", visible });
     }
     expect(clientCommandSchema.safeParse({ type: "overlay.visibility", visible: "false" }).success).toBe(false);
+  });
+
+  it("validates opt-in auto-live settings and cancellation", () => {
+    for (const enabled of [true, false]) {
+      const command = { type: "live.auto.settings", enabled };
+      expect(clientCommandSchema.parse(command)).toEqual(command);
+    }
+    expect(clientCommandSchema.safeParse({ type: "live.auto.settings", enabled: "true" }).success).toBe(false);
+    expect(clientCommandSchema.parse({ type: "live.auto.cancel" })).toEqual({ type: "live.auto.cancel" });
   });
 });

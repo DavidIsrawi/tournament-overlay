@@ -133,6 +133,8 @@ describe("live WebSocket protocol", () => {
       ["first", { type: "live.take", eventId: "event-1", setId: "group-1-a" }],
       ["second", { type: "live.take", eventId: "event-1", setId: "group-1-b" }],
       ["metadata", { type: "presentation.metadata", fields: ["country", "social"] }],
+      ["auto-live", { type: "live.auto.settings", enabled: true }],
+      ["cancel-auto-live", { type: "live.auto.cancel" }],
       ["hide", { type: "overlay.visibility", visible: false }],
     ] satisfies [string, ClientCommand][]) {
       dashboard.send(id, command);
@@ -143,6 +145,7 @@ describe("live WebSocket protocol", () => {
       type: "state.snapshot",
       state: {
         operator: {
+          autoTakeEnabled: true,
           presentation: { overlayVisible: false, metadataFields: ["country", "social"] },
           previousLiveSelection: { setId: "group-1-a" },
         },

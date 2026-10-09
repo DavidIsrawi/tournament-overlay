@@ -54,19 +54,19 @@ Open:
 Browsing sets, phases, or another event never replaces the live scoreboard.
 **Take live** fetches the latest set details before switching; a failed fetch
 leaves the previous scene on air. Side swaps and overlay-design changes apply
-to the live output immediately and are labeled **Applies live**.
+to the live output immediately.
 
 The **Live output / Next set** desk stays above the bracket while you scroll,
 including on narrow screens. Event loading collapses after setup; open
 **Change event** to browse another event without replacing the live set.
-**Live controls & setup** contains presentation settings and the OBS URL.
+**Settings** groups broadcast controls, overlay appearance, and the OBS URL.
 On short windows, the broadcast desk scrolls as one viewport-bounded area so
 every setup control remains reachable. On taller windows, primary controls
 remain visible above the separately scrolling settings.
 
 - **Hide overlay** makes the OBS source transparent without discarding the live
   set or stopping score updates. **Show overlay** reveals the current scoreboard.
-- **Restore previous live set** fetches the previous selection before putting it
+- **Restore previous**, under **Settings**, fetches the previous selection before putting it
   back on air. Failed restores leave the current output unchanged.
 - **Take live** and a successful restore reveal the scoreboard. Hiding the
   overlay cancels an in-flight take or restore so it cannot unexpectedly reappear.
@@ -74,6 +74,18 @@ remain visible above the separately scrolling settings.
 - Octagon displays up to two selected player details: seed, pronouns, country,
   or social handle. The default is seed and pronouns. Missing details and details
   that cannot fit are omitted as a whole, never shown as clipped fragments.
+- **Auto-live next set**, under **Settings → Broadcast**, is off
+  by default. Enable it and select an unfinished next set with both players
+  resolved before the live set ends. When fresh StartGG data marks the live set
+  completed, the dashboard shows a cancellable 10-second countdown. The server
+  then fetches fresh next-set data before switching and saves the live scene.
+  Scores alone do not trigger this action.
+- **Cancel auto-live**, manual Take live/Restore, hiding output, changing the
+  event/phase/selected set, disabling the setting, and stale live data cancel the
+  automatic transition. Completed or unresolved next sets are never taken
+  automatically. Failures are reported in Next set and can be retried manually.
+  The setting is saved, but countdowns are not resumed after restart or started
+  for a live set that was already completed when restored.
 
 The setup screen stores the token in the current user's local configuration
 directory with owner-only file permissions. It is read only by the server and
@@ -240,7 +252,18 @@ version flag to run every check without changing or pushing anything.
 4. Set width to `1920` and height to `1080`.
 5. Enable **Refresh browser when scene becomes active** if desired.
 
-The page background is transparent. The overlay reconnects automatically and receives a complete snapshot after reconnecting; it never contacts StartGG directly. Choose **Octagon** or **Minimal** under **Live controls & setup** and the existing OBS source switches immediately. To pin a source to one design, add `?template=octagon` or `?template=minimal` to its URL. Hide/show applies to both designs, including pinned sources.
+The page background is transparent. The overlay reconnects automatically and receives a complete snapshot after reconnecting; it never contacts StartGG directly. Choose **Octagon** or **Minimal** under **Settings → Appearance** and the existing OBS source switches immediately. To pin a source to one design, add `?template=octagon` or `?template=minimal` to its URL. Hide/show applies to both designs, including pinned sources.
+
+Octagon keeps player scores and round context at the top, with the purple
+tournament/event bar in the bottom-left corner. Tournament and bracket titles
+occupy separate lines in a 256px-wide, 64px-high plate on the 1920x1080 canvas.
+The width and 18px/17px text sizes match the top-left round plate. It stays left
+of the character HUD and away from centered player cameras in the reference
+stream layout. Each title is ellipsized independently when needed. Standard
+round names use `WR 2`,
+`LR 3`, `WQF`/`LQF`, `WSF`/`LSF`, `WF`/`LF`, `GF`, and `GF Reset`.
+Numbered rounds without a bracket side use `R 4`. Custom round names and pool
+qualifiers are preserved, and the full round name remains in the title attribute.
 
 ## Architecture
 

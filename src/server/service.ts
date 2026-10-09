@@ -5,6 +5,8 @@ import {
   type ClientCommand,
   type NormalizedEvent,
   type NormalizedSet,
+  type LiveSelection,
+  type AutoTakeState,
   type OperatorState,
   type PresentationState,
   type ProviderId,
@@ -27,6 +29,8 @@ import { DEFAULT_OVERLAY_METADATA_FIELDS } from "../shared/overlay-metadata.ts";
 
 export { BRACKET_REFRESH_INTERVAL_MS } from "./bracket-controller.ts";
 
+export const AUTO_TAKE_DELAY_MS = 10_000;
+
 const DEFAULT_OPERATOR_STATE: OperatorState = {
   providerId: "startgg",
   eventInput: "",
@@ -34,6 +38,7 @@ const DEFAULT_OPERATOR_STATE: OperatorState = {
   selectedSetId: null,
   liveSelection: null,
   previousLiveSelection: null,
+  autoTakeEnabled: false,
   presentation: {
     sideOrder: "normal",
     overlayTemplateId: "octagon",
@@ -52,6 +57,9 @@ export class TournamentService {
   #operatorReady: Promise<void> = Promise.resolve();
   #restoreError: Error | null = null;
   #closed = false;
+  #autoTakeTimer: NodeJS.Timeout | null = null;
+  #autoTakeSource: LiveSelection | null = null;
+  #autoTakeGeneration = 0;
 
   public constructor(
     private readonly providers: ProviderRegistry,
@@ -69,6 +77,7 @@ export class TournamentService {
       connection: IDLE_CONNECTION,
       liveConnection: IDLE_CONNECTION,
       event: null,
+      autoTake: null,
       overlay: deriveOverlayView(
         0,
         null,
@@ -95,6 +104,7 @@ export class TournamentService {
     }, pollIntervalMs, bracketRefreshIntervalMs);
     this.#live = new LiveScene(providers, pollIntervalMs, (scene) => {
       const previousEvent = this.#liveEvent;
+      const previousSet = this.#liveSet;
       this.#liveEvent = scene.event;
       this.#liveSet = scene.set;
       const current = this.getState();
@@ -123,6 +133,13 @@ export class TournamentService {
         },
         liveConnection: scene.connection,
       });
+      if (!scene.taken && scene.connection.status === "fresh" &&
+          previousSet !== null && previousSet.state !== "completed" &&
+          scene.set?.state === "completed" && previousSet.id === scene.set.id &&
+          previousEvent?.id === scene.event?.id &&
+          previousEvent?.providerId === scene.event?.providerId) {
+        this.#queueAutoTake();
+      }
     });
   }
 
@@ -138,6 +155,7 @@ export class TournamentService {
     if (this.#closed) {
       throw new Error("Tournament service is closed.");
     }
+    this.#cancelAutoTake();
     this.#bracket.invalidate();
     this.providers.replace(provider);
     this.#live.refresh();
@@ -230,6 +248,13 @@ export class TournamentService {
     if (this.#closed) {
       throw new Error("Tournament service is closed.");
     }
+    if (command.type === "event.load" || command.type === "phase.select" ||
+        command.type === "set.select" || command.type === "live.take" ||
+        command.type === "live.restore" || command.type === "live.auto.cancel" ||
+        command.type === "live.auto.settings" || command.type === "refresh" ||
+        (command.type === "overlay.visibility" && !command.visible)) {
+      this.#cancelAutoTake();
+    }
     switch (command.type) {
       case "event.load":
         await this.loadEvent(command.providerId, command.input, false);
@@ -258,6 +283,14 @@ export class TournamentService {
         await this.#saveOperator(this.getState().operator);
         break;
       }
+      case "live.auto.settings": {
+        const operator = { ...this.getState().operator, autoTakeEnabled: command.enabled };
+        this.#commit({ operator });
+        await this.#saveOperator(operator);
+        break;
+      }
+      case "live.auto.cancel":
+        break;
       case "overlay.visibility":
         if (command.visible) {
           if (this.#liveSet === null || this.getState().operator.liveSelection === null) {
@@ -298,6 +331,7 @@ export class TournamentService {
       return;
     }
     this.#closed = true;
+    this.#resetAutoTake();
     this.#bracket.close();
     this.#live.close();
   }
@@ -307,6 +341,110 @@ export class TournamentService {
       return Promise.reject(new Error("Tournament service is closed."));
     }
     return this.#bracket.loadEvent(providerId, input, preserveSelection);
+  }
+
+  #queueAutoTake(): void {
+    const state = this.getState();
+    if (!state.operator.autoTakeEnabled || state.event === null ||
+        state.operator.selectedSetId === null || state.operator.liveSelection === null) {
+      return;
+    }
+    this.#autoTakeSource = state.operator.liveSelection;
+    const queued: AutoTakeState = {
+      status: "countdown",
+      eventId: state.event.id,
+      setId: state.operator.selectedSetId,
+      takeAt: new Date(Date.now() + AUTO_TAKE_DELAY_MS).toISOString(),
+    };
+    this.#commit({ autoTake: queued });
+    if (this.getState().autoTake === queued) {
+      this.#autoTakeTimer = setTimeout(() => {
+        this.#autoTakeTimer = null;
+        void this.#takeAutomatically();
+      }, AUTO_TAKE_DELAY_MS);
+    }
+  }
+
+  #validAutoTake(
+    queued: Exclude<AutoTakeState, { status: "error" }>,
+    operator: OperatorState,
+    event: NormalizedEvent | null,
+    liveStatus: ServerState["liveConnection"]["status"],
+  ): boolean {
+    const target = findSet(event, queued.setId);
+    const source = this.#autoTakeSource;
+    const live = operator.liveSelection;
+    return operator.autoTakeEnabled && operator.presentation.overlayVisible &&
+      event?.id === queued.eventId && operator.selectedSetId === queued.setId &&
+      target !== null && target.state !== "completed" &&
+      target.entrants.every((slot) => slot !== null) && liveStatus === "fresh" &&
+      (this.#autoTakeAccepted(queued) ||
+        (source !== null && live !== null && this.#liveSet?.state === "completed" &&
+          source.providerId === live.providerId && source.eventInput === live.eventInput &&
+          source.phaseGroupId === live.phaseGroupId && source.setId === live.setId &&
+          (event.providerId !== live.providerId || event.slug !== live.eventInput ||
+            queued.setId !== live.setId)));
+  }
+
+  #autoTakeAccepted(queued: AutoTakeState | null): boolean {
+    // A successful take publishes its new scene before the settings save settles.
+    return queued?.status === "taking" && this.#liveEvent?.id === queued.eventId &&
+      this.#liveSet?.id === queued.setId;
+  }
+
+  #resetAutoTake(): void {
+    if (this.#autoTakeTimer !== null) {
+      clearTimeout(this.#autoTakeTimer);
+      this.#autoTakeTimer = null;
+    }
+    const queued = this.getState().autoTake;
+    if (queued?.status === "taking" && !this.#autoTakeAccepted(queued)) {
+      this.#live.cancelTake();
+    }
+    this.#autoTakeSource = null;
+    this.#autoTakeGeneration += 1;
+  }
+
+  #cancelAutoTake(): void {
+    if (this.getState().autoTake !== null) {
+      this.#resetAutoTake();
+      this.#commit({ autoTake: null });
+    }
+  }
+
+  async #takeAutomatically(): Promise<void> {
+    const { autoTake, event } = this.getState();
+    if (this.#closed || autoTake?.status !== "countdown" || event === null) {
+      return;
+    }
+    const generation = this.#autoTakeGeneration;
+    this.#commit({ autoTake: { ...autoTake, status: "taking" } });
+    if (generation !== this.#autoTakeGeneration) {
+      return;
+    }
+    try {
+      await this.#live.take(event, autoTake.setId, { unfinishedOnly: true });
+      await this.#saveOperator(this.getState().operator);
+      if (generation === this.#autoTakeGeneration) {
+        this.#resetAutoTake();
+        this.#commit({ autoTake: null });
+      }
+    } catch (error) {
+      if (generation !== this.#autoTakeGeneration &&
+          error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+      console.warn("Automatic Take live failed:", requestMessage(error));
+      if (generation === this.#autoTakeGeneration) {
+        this.#resetAutoTake();
+        this.#commit({
+          autoTake: {
+            status: "error",
+            message: `Automatic Take live failed. ${requestMessage(error)} Use Take live to retry manually.`,
+          },
+        });
+      }
+    }
   }
 
   async #updatePresentation(patch: Partial<PresentationState>): Promise<void> {
@@ -320,13 +458,19 @@ export class TournamentService {
   }
 
   #commit(
-    patch: Partial<Pick<ServerState, "providers" | "operator" | "connection" | "liveConnection" | "event">>,
+    patch: Partial<Pick<ServerState, "providers" | "operator" | "connection" | "liveConnection" | "event" | "autoTake">>,
   ): void {
     const current = this.getState();
     const revision = current.revision + 1;
     const operator = patch.operator ?? current.operator;
     const connection = patch.connection ?? current.connection;
     const event = patch.event === undefined ? current.event : patch.event;
+    let autoTake = patch.autoTake === undefined ? current.autoTake : patch.autoTake;
+    if (autoTake !== null && autoTake.status !== "error" &&
+        !this.#validAutoTake(autoTake, operator, event, (patch.liveConnection ?? current.liveConnection).status)) {
+      this.#resetAutoTake();
+      autoTake = null;
+    }
     this.#hub.publish({
       ...current,
       ...patch,
@@ -334,6 +478,7 @@ export class TournamentService {
       operator,
       connection,
       event,
+      autoTake,
       overlay: deriveOverlayView(
         revision,
         this.#liveEvent,

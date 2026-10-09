@@ -36,11 +36,19 @@ export class LiveScene {
     private readonly publish: (scene: LiveSceneSnapshot) => void,
   ) {}
 
-  public take(event: NormalizedEvent, setId: string): Promise<void> {
+  public take(
+    event: NormalizedEvent,
+    setId: string,
+    options: { readonly unfinishedOnly?: boolean } = {},
+  ): Promise<void> {
     return this.#takeScene(async (signal) => {
       const set = await this.providers.get(event.providerId).loadSet(setId, event, { signal });
       signal.throwIfAborted();
       this.#validateSet(set, setId, findSet(event, setId)?.phaseGroupId);
+      if (options.unfinishedOnly &&
+          (set.state === "completed" || set.entrants.some((slot) => slot === null))) {
+        throw new ProviderError("set_not_ready", "The next set is completed or has unresolved players. Select another set.");
+      }
       return { event, set };
     });
   }

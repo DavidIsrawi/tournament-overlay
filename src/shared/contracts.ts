@@ -10,7 +10,7 @@ import {
   type OverlayMetadataField,
 } from "./overlay-metadata.ts";
 
-export const PROTOCOL_VERSION = 7 as const;
+export const PROTOCOL_VERSION = 8 as const;
 
 export type ProviderId = "startgg" | (string & {});
 
@@ -85,6 +85,7 @@ export interface OperatorState {
   readonly selectedSetId: string | null;
   readonly liveSelection: LiveSelection | null;
   readonly previousLiveSelection: LiveSelection | null;
+  readonly autoTakeEnabled: boolean;
   readonly presentation: PresentationState;
 }
 
@@ -145,7 +146,20 @@ export interface ServerState {
   readonly liveConnection: ConnectionState;
   readonly event: NormalizedEvent | null;
   readonly overlay: OverlayView;
+  readonly autoTake: AutoTakeState | null;
 }
+
+export type AutoTakeState =
+  | {
+      readonly status: "countdown" | "taking";
+      readonly eventId: string;
+      readonly setId: string;
+      readonly takeAt: string;
+    }
+  | {
+      readonly status: "error";
+      readonly message: string;
+    };
 
 const metadataFieldsSchema = z.array(z.enum(OVERLAY_METADATA_FIELDS))
   .max(2)
@@ -174,6 +188,7 @@ export const operatorStateSchema = z.object({
   selectedSetId: z.string().nullable(),
   liveSelection: liveSelectionSchema.nullable().optional(),
   previousLiveSelection: liveSelectionSchema.nullable().default(null),
+  autoTakeEnabled: z.boolean().default(false),
   presentation: presentationStateSchema,
 }).transform((operator): OperatorState => ({
   ...operator,
@@ -218,6 +233,15 @@ const restoreLiveCommandSchema = z.object({
   type: z.literal("live.restore"),
 });
 
+const autoTakeSettingsCommandSchema = z.object({
+  type: z.literal("live.auto.settings"),
+  enabled: z.boolean(),
+});
+
+const autoTakeCancelCommandSchema = z.object({
+  type: z.literal("live.auto.cancel"),
+});
+
 const overlayVisibilityCommandSchema = z.object({
   type: z.literal("overlay.visibility"),
   visible: z.boolean(),
@@ -251,6 +275,8 @@ export const clientCommandSchema = z.discriminatedUnion("type", [
   setSelectCommandSchema,
   takeLiveCommandSchema,
   restoreLiveCommandSchema,
+  autoTakeSettingsCommandSchema,
+  autoTakeCancelCommandSchema,
   overlayVisibilityCommandSchema,
   presentationMetadataCommandSchema,
   presentationSwapCommandSchema,
@@ -407,6 +433,18 @@ export const serverStateSchema = z.object({
   liveConnection: connectionStateSchema,
   event: normalizedEventSchema.nullable(),
   overlay: overlayViewSchema,
+  autoTake: z.discriminatedUnion("status", [
+    z.object({
+      status: z.enum(["countdown", "taking"]),
+      eventId: z.string().min(1),
+      setId: z.string().min(1),
+      takeAt: z.iso.datetime(),
+    }),
+    z.object({
+      status: z.literal("error"),
+      message: z.string().min(1),
+    }),
+  ]).nullable().default(null),
 });
 
 export const serverMessageSchema = z.discriminatedUnion("type", [

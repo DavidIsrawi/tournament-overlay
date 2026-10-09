@@ -61,9 +61,9 @@ describe("broadcast controls", () => {
     expect(html).toContain('aria-label="Broadcast controls"');
     expect(html.indexOf("Live output")).toBeLessThan(html.indexOf("Next set"));
     expect(html).toContain("Applies live");
-    expect(html).toContain("These controls apply immediately, not to Preview.");
+    expect(html).toContain("Changes apply live. Restore fetches fresh data first.");
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Already live<\/button>/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Restore previous live set<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Restore previous<\/button>/);
   });
 
   it("allows taking the same set when hidden and offers an explicit show action", () => {
@@ -99,7 +99,7 @@ describe("broadcast controls", () => {
     const html = render(scene(), [], false);
     expect(html).toContain(">Disconnected</span>");
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Hide overlay<\/button>/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Swap live player sides<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Swap sides<\/button>/);
   });
 
   it("limits metadata to two selections without disabling their removal", () => {
@@ -153,5 +153,82 @@ describe("broadcast controls", () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain("The previous set could not be loaded.");
     expect(html.indexOf('role="alert"')).toBeLessThan(html.indexOf('class="scene__desk"'));
+  });
+
+  it("keeps auto-live opt-in and explains provider-confirmed completion", () => {
+    const html = render(scene());
+    expect(html).toContain("Auto-live next set");
+    expect(html).toContain("StartGG marks the");
+    expect(html).toContain("cancellable 10-second countdown");
+    expect(html).toContain('aria-describedby="auto-take-help"');
+    expect(html).not.toContain("Cancel auto-live");
+  });
+
+  it("keeps the enabled auto-live mode visible without opening settings", () => {
+    const state = scene();
+    const next = fixtureSet("match-two");
+    const event = {
+      ...state.event!,
+      phaseGroups: [{ ...state.event!.phaseGroups[0]!, sets: [next] }],
+    };
+    const configured = {
+      ...state,
+      event,
+      operator: { ...state.operator, selectedSetId: next.id, autoTakeEnabled: true },
+    };
+    const html = render(configured);
+    expect(html.indexOf("Auto-live on")).toBeLessThan(html.indexOf('class="scene-settings"'));
+    vi.mocked(useTournamentSocket).mockReturnValue({
+      state: configured, socketStatus: "connected", error: null, animationEvents: [],
+      pendingCommands: [], upgradeRequired: false, sendCommand: () => true, dismissError: () => {},
+    });
+    expect(renderToStaticMarkup(createElement(App))).toContain("Auto-live takes it on air after a 10-second countdown.");
+  });
+
+  it("groups every setting under a single Settings disclosure with concise live cues", () => {
+    const html = render(scene());
+    expect(html).toContain("<summary>Settings</summary>");
+    expect(html).not.toContain("Live controls");
+    expect(html).not.toContain("Automatic transitions");
+    expect(html).toContain('aria-label="Broadcast settings"');
+    expect(html).toContain('aria-label="Appearance settings"');
+    expect(html).toContain('aria-label="OBS source settings"');
+    expect(html).toContain(">Swap sides</button>");
+    expect(html).toContain(">Restore previous</button>");
+    expect(html).toContain("Auto-live next set");
+    expect(html).toContain(">Octagon</button>");
+    expect(html).toContain(">Minimal</button>");
+    expect(html).toContain("Player details (Octagon)");
+    expect(html).toContain(">Copy URL</button>");
+    expect(html).toContain(">Open overlay</a>");
+    expect(html.match(/Applies live/g)).toHaveLength(1);
+    expect(html).toContain('aria-describedby="live-visibility-help"');
+    expect(html).toContain('id="live-visibility-help" class="sr-only"');
+  });
+
+  it("shows a cancellable countdown outside collapsed settings", () => {
+    const html = render({
+      ...scene(),
+      autoTake: { status: "countdown", eventId: "event-1", setId: "match-two", takeAt: new Date(Date.now() + 10_000).toISOString() },
+    });
+    expect(html).toContain("Next set goes live in 10s.");
+    expect(html).toContain("Cancel auto-live");
+    expect(html.indexOf("Cancel auto-live")).toBeLessThan(html.indexOf('class="scene-settings"'));
+  });
+
+  it("keeps cancellation and hiding available while automatically fetching", () => {
+    const html = render({
+      ...scene(),
+      autoTake: { status: "taking", eventId: "event-1", setId: "match-two", takeAt: new Date().toISOString() },
+    });
+    expect(html).toContain("Automatically fetching the next set");
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Cancel auto-live<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Hide overlay<\/button>/);
+  });
+
+  it("shows automatic failures as an explicit dismissible alert", () => {
+    const html = render({ ...scene(), autoTake: { status: "error", message: "Automatic Take live failed." } });
+    expect(html).toContain('role="alert">Automatic Take live failed.');
+    expect(html).toContain("Dismiss auto-live error");
   });
 });
