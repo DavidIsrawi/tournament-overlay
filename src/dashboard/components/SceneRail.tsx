@@ -66,6 +66,14 @@ export function SceneRail({
   const pending = (type: ClientCommand["type"]): boolean =>
     pendingCommands.some((command) => command.type === type);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now);
+  const countdownAt = state.autoTake?.status === "countdown" ? state.autoTake.takeAt : null;
+  useEffect(() => {
+    if (countdownAt === null) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [countdownAt]);
   const deskRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const desk = deskRef.current;
@@ -83,7 +91,8 @@ export function SceneRail({
   }, []);
   const hasLive = state.overlay.setId !== null;
   const visible = state.operator.presentation.overlayVisible;
-  const switching = pending("live.take") || pending("live.restore");
+  const switching = pending("live.take") || pending("live.restore") || state.autoTake?.status === "taking";
+  const countdownSeconds = countdownAt === null ? null : Math.max(0, Math.ceil((Date.parse(countdownAt) - now) / 1_000));
   const liveLabel = !visible ? "Hidden" : !hasLive ? "No set" :
     !connected ? "Disconnected" : state.overlay.status === "ready" ? "On air" : "Stale";
   const url = overlayUrl();
@@ -130,13 +139,14 @@ export function SceneRail({
         <button
           className="button button--quiet"
           type="button"
-          aria-describedby="live-action-note"
+          aria-describedby="live-visibility-help"
           disabled={!connected || pending("overlay.visibility") || (!hasLive && !switching)}
           onClick={() => send({ type: "overlay.visibility", visible: switching ? false : !visible })}
         >
           {pending("overlay.visibility") ? "Updating output…" :
             switching && !visible ? "Cancel transition" : visible ? "Hide overlay" : "Show overlay"}
         </button>
+        <span id="live-visibility-help" className="sr-only">Hidden output keeps receiving score updates.</span>
         <p className="scene__freshness" role="status">
           {connected ? `Live data ${state.liveConnection.status}` : "Server disconnected"}
           {" · "}{state.liveConnection.lastUpdatedAt === null ? "Not updated yet" : formatTime(state.liveConnection.lastUpdatedAt)}
@@ -146,7 +156,7 @@ export function SceneRail({
       <section className="scene-preview" aria-labelledby="preview-title">
         <div className="scene__heading">
           <h2 id="preview-title">Next set</h2>
-          <span className="scene__live">{alreadyLive ? "Same set" : "Preview"}</span>
+          <span className="scene__live">{alreadyLive ? "Same set" : state.operator.autoTakeEnabled ? "Auto-live on" : "Preview"}</span>
         </div>
         <p className="scene__context" title={`${preview.roundName} · ${preview.tournamentName} / ${preview.eventName}`}>
           {selectedSet?.round.name ?? "Select a set below"}
@@ -163,9 +173,27 @@ export function SceneRail({
             }
           }}
         >
-          {pending("live.take") ? "Taking live…" : alreadyLive && visible ? "Already live" : "Take live"}
+          {pending("live.take") || state.autoTake?.status === "taking" ? "Taking live…" :
+            alreadyLive && visible ? "Already live" : "Take live"}
         </button>
         <p className="scene__freshness">Fetches fresh scores, then goes on air.</p>
+        {state.autoTake !== null && (
+          <div className="scene-auto-take">
+            <p className="scene__warning" role={state.autoTake.status === "error" ? "alert" : "status"}>
+              {state.autoTake.status === "error" ? state.autoTake.message :
+                state.autoTake.status === "taking" ? "Automatically fetching the next set…" :
+                  `Next set goes live in ${String(countdownSeconds)}s.`}
+            </p>
+            <button
+              className="button button--quiet button--small"
+              type="button"
+              disabled={!connected || pending("live.auto.cancel")}
+              onClick={() => send({ type: "live.auto.cancel" })}
+            >
+              {state.autoTake.status === "error" ? "Dismiss auto-live error" : "Cancel auto-live"}
+            </button>
+          </div>
+        )}
       </section>
       </div>
 
@@ -173,108 +201,122 @@ export function SceneRail({
         <p className="scene__warning" role="status">{state.liveConnection.message}</p>
       )}
       <details className="scene-settings">
-        <summary>Live controls &amp; setup <span>Applies live</span></summary>
+        <summary>Settings</summary>
         <div className="scene-settings__body">
-        <section className="scene__actions" aria-label="Immediate live actions">
-          <h3>Live actions</h3>
-          <p id="live-action-note">These controls apply immediately, not to Preview. Hidden output keeps receiving score updates.</p>
-          <button
-            className="button"
-            type="button"
-            disabled={!connected || !hasLive || switching || pending("presentation.swap")}
-            onClick={() => send({ type: "presentation.swap" })}
-          >
-            Swap live player sides
-          </button>
-          <button
-            className="button button--quiet"
-            type="button"
-            disabled={!connected || state.operator.previousLiveSelection === null || switching || pending("overlay.visibility")}
-            onClick={() => send({ type: "live.restore" })}
-          >
-            {pending("live.restore") ? "Restoring…" : "Restore previous live set"}
-          </button>
-          <p>Restore fetches the previous set and shows it on air. A failed fetch leaves the current output unchanged.</p>
-        </section>
+          <section className="scene__actions" aria-label="Broadcast settings">
+            <h3>Broadcast</h3>
+            <div className="scene-settings__actions">
+              <button
+                className="button button--small"
+                type="button"
+                aria-describedby="live-action-note"
+                disabled={!connected || !hasLive || switching || pending("presentation.swap")}
+                onClick={() => send({ type: "presentation.swap" })}
+              >
+                Swap sides
+              </button>
+              <button
+                className="button button--small button--quiet"
+                type="button"
+                aria-describedby="live-action-note"
+                disabled={!connected || state.operator.previousLiveSelection === null || switching || pending("overlay.visibility")}
+                onClick={() => send({ type: "live.restore" })}
+              >
+                {pending("live.restore") ? "Restoring…" : "Restore previous"}
+              </button>
+            </div>
+            <p id="live-action-note">Changes apply live. Restore fetches fresh data first.</p>
+            <label className="auto-take-setting">
+              <input
+                type="checkbox"
+                checked={state.operator.autoTakeEnabled}
+                aria-describedby="auto-take-help"
+                disabled={!connected || pending("live.auto.settings")}
+                onChange={() => send({ type: "live.auto.settings", enabled: !state.operator.autoTakeEnabled })}
+              />
+              Auto-live next set
+            </label>
+            <p id="auto-take-help">
+              Select Next set before the live set ends. When StartGG marks the
+              live set completed, a cancellable 10-second countdown starts.
+            </p>
+          </section>
 
-      <fieldset className="overlay-picker">
-        <legend>Overlay design · applies live</legend>
-        <div>
-          {OVERLAY_TEMPLATES.map((template) => (
-            <button
-              type="button"
-              key={template.id}
-              disabled={!connected || pending("overlay.select")}
-              aria-pressed={template.id === activeTemplate.id}
-              onClick={() =>
-                send({
-                  type: "overlay.select",
-                  templateId: template.id,
-                })
-              }
-            >
-              {template.name}
-            </button>
-          ))}
-        </div>
-        <p>{activeTemplate.description}</p>
-      </fieldset>
+          <section className="scene-settings__appearance" aria-label="Appearance settings">
+            <div className="scene-settings__heading">
+              <h3>Appearance</h3>
+              <span>Applies live</span>
+            </div>
+            <fieldset className="overlay-picker">
+              <legend>Design</legend>
+              <div>
+                {OVERLAY_TEMPLATES.map((template) => (
+                  <button
+                    type="button"
+                    key={template.id}
+                    title={template.description}
+                    disabled={!connected || pending("overlay.select")}
+                    aria-pressed={template.id === activeTemplate.id}
+                    onClick={() => send({ type: "overlay.select", templateId: template.id })}
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
 
-      <fieldset className="metadata-picker">
-        <legend>Octagon player details · applies live</legend>
-        <p id="metadata-help">Choose up to two. Uncheck a detail to choose another. Details that cannot fit are omitted, never clipped.</p>
-        <div>
-          {OVERLAY_METADATA_FIELDS.map((field) => {
-            const selected = state.operator.presentation.metadataFields.includes(field);
-            return (
-              <label key={field}>
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  aria-describedby="metadata-help"
-                  disabled={!connected || pending("presentation.metadata") ||
-                    (!selected && state.operator.presentation.metadataFields.length >= 2)}
-                  onChange={() => send({
-                    type: "presentation.metadata",
-                    fields: selected
-                      ? state.operator.presentation.metadataFields.filter((value) => value !== field)
-                      : [...state.operator.presentation.metadataFields, field],
-                  })}
-                />
-                {OVERLAY_METADATA_LABELS[field]}
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
+            <fieldset className="metadata-picker">
+              <legend>Player details (Octagon)</legend>
+              <p id="metadata-help">Choose up to two. Uncheck one to replace it.</p>
+              <div>
+                {OVERLAY_METADATA_FIELDS.map((field) => {
+                  const selected = state.operator.presentation.metadataFields.includes(field);
+                  return (
+                    <label key={field}>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        aria-describedby="metadata-help"
+                        disabled={!connected || pending("presentation.metadata") ||
+                          (!selected && state.operator.presentation.metadataFields.length >= 2)}
+                        onChange={() => send({
+                          type: "presentation.metadata",
+                          fields: selected
+                            ? state.operator.presentation.metadataFields.filter((value) => value !== field)
+                            : [...state.operator.presentation.metadataFields, field],
+                        })}
+                      />
+                      {OVERLAY_METADATA_LABELS[field]}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </section>
 
-      <section className="overlay-link">
-        <h3>OBS browser source</h3>
-        <p>
-          {activeTemplate.name} · 1920 × 1080 · transparent background
-        </p>
-        <code>{url}</code>
-        <div>
-          <button
-            className="button button--small"
-            type="button"
-            onClick={() => {
-              void copy();
-            }}
-          >
-            Copy URL
-          </button>
-          <a
-            className="button button--small button--quiet"
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open overlay
-          </a>
-        </div>
-        <output aria-live="polite">{copyStatus}</output>
-      </section>
+          <section className="overlay-link" aria-label="OBS source settings">
+            <h3>OBS source</h3>
+            <p>1920 × 1080 · transparent</p>
+            <code title={url}>{url}</code>
+            <div>
+              <button
+                className="button button--small"
+                type="button"
+                onClick={() => { void copy(); }}
+              >
+                Copy URL
+              </button>
+              <a
+                className="button button--small button--quiet"
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open overlay
+              </a>
+            </div>
+            <output aria-live="polite">{copyStatus}</output>
+          </section>
         </div>
       </details>
     </aside>

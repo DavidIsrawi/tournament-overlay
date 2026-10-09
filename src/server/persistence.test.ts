@@ -24,6 +24,7 @@ const legacyState = {
 };
 const state: OperatorState = {
   ...legacyState,
+  autoTakeEnabled: false,
   presentation: presentationStateSchema.parse(legacyState.presentation),
   previousLiveSelection: null,
   liveSelection: {
@@ -84,6 +85,17 @@ afterEach(async () => {
 });
 
 describe("AtomicOperatorStateStore", () => {
+  it("defaults existing saved states to auto-live off and preserves an explicit opt-in", async () => {
+    const { store, filePath } = await createStore();
+    await writeFile(filePath, JSON.stringify({
+      ...envelope(),
+      operator: { ...state, autoTakeEnabled: undefined },
+    }));
+    expect((await store.load(state)).autoTakeEnabled).toBe(false);
+    await store.save({ ...state, autoTakeEnabled: true });
+    expect((await store.load(state)).autoTakeEnabled).toBe(true);
+  });
+
   it("restores the last persisted operator scene", async () => {
     const { store, filePath, directory } = await createStore();
     await store.save(state);

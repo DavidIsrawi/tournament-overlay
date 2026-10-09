@@ -92,7 +92,11 @@ export function BracketWorkspace({
       <div className="bracket__tools">
         <div>
           <h1>{group?.phaseName ?? "Bracket"}</h1>
-          <p>Select a set for Preview. Take live puts it on air.</p>
+          <p>
+            {state.operator.autoTakeEnabled
+              ? "Select the next set before the live set ends. Auto-live takes it on air after a 10-second countdown."
+              : "Select a set for Preview. Take live puts it on air."}
+          </p>
           <p>
             {group === undefined
               ? "Load an event to browse its phase groups."

@@ -29,11 +29,13 @@ function makeState(revision: number): ServerState {
       selectedSetId: null,
       liveSelection: null,
       previousLiveSelection: null,
+      autoTakeEnabled: false,
       presentation: presentationStateSchema.parse({ sideOrder: "normal" }),
     },
     connection,
     liveConnection: connection,
     event: null,
+    autoTake: null,
     overlay: deriveOverlayView(
       revision,
       null,

@@ -28,6 +28,13 @@ Operators can hide output without losing the current set and safely restore
 the previous live selection. Octagon prioritizes complete names, scores, and
 round context over optional player details.
 
+An optional, disabled-by-default automatic transition takes the selected next
+set live 10 seconds after fresh provider data reports the live set completed.
+The server owns the countdown, fetches fresh next-set data before switching,
+and exposes cancellation and failures in the broadcast desk. Manual overrides,
+hidden output, changed selections, and stale live data cancel the transition.
+Saved settings survive restart, but pending countdowns do not.
+
 ## Capabilities and Constraints
 
 - StartGG integration uses only the official GraphQL API and is read-only.

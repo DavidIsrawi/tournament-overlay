@@ -167,7 +167,24 @@ On viewports at most 600px tall, the whole broadcast desk becomes one
 viewport-bounded scroll area instead. This keeps the last setup controls
 reachable without trapping them beneath an independently scrolling panel.
 
-The overlay owns a transparent 1920x1080 canvas and keeps all artwork in the upper broadcast-safe band. It scales the complete stage proportionally to the browser source rather than reflowing individual plates.
+Auto-live next set is a disabled-by-default saved option in Settings / Broadcast.
+An observed live-set completion starts a 10-second countdown for the selected
+eligible next set; its status and Cancel auto-live action remain visible in
+Next set, outside the collapsed settings. Manual overrides, hidden output,
+changed selections, and stale live data cancel it. Failed fetches keep the
+current scene on air. A failed settings save reports that the new scene was
+not saved.
+
+The overlay owns a transparent 1920x1080 canvas. Player plates, round context,
+and the helm stay in the upper broadcast-safe band; the purple tournament/event
+plate sits 27px from the bottom-left edges. Tournament and bracket titles sit
+on separate lines in a 256px-wide, 64px-high plate. Its 18px tournament text and
+17px bracket text match the top-left round plate. The footprint stays left of
+the character HUD and away from centered player cameras in the reference
+stream layout. Each line truncates independently with an ellipsis. Standard
+round titles use WR/LR, WQF/LQF, WSF/LSF, WF/LF, GF, and GF Reset. It scales the
+complete stage proportionally to the browser source rather than reflowing
+individual plates.
 
 ## Elevation & Depth
 
@@ -214,8 +231,12 @@ The signature shape is a fitted plate with opposing asymmetric corners: usually 
 - **Preview and live scene:** Chart Sand **Take live** fetches current data before
   replacing the output. Set-card selection only updates Preview; **On air**,
   **Hidden**, and **Disconnected** labels make output state explicit. Hide/Show
-  is a secondary action, while Restore previous remains in Live controls.
-  Immediate side, design, and metadata changes are labeled **Applies live**.
+  is a secondary action, while Restore previous remains in **Settings**.
+  Settings uses three compact groups: Broadcast, Appearance, and OBS source.
+  Broadcast keeps Swap sides, Restore previous, and Auto-live next set together;
+  Appearance combines design selection and player details with one
+  **Applies live** cue. Instructions stay short and controls remain reachable
+  in the bounded settings scroller on narrow or short viewports.
   Bracket and live-set freshness are shown separately on every screen size.
 - **Round headers:** Deep Navy bars with compact labels and Chart Sand counts.
 - **About and updates:** A secondary command-bar action expands an inline Paper
