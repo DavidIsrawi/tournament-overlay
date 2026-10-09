@@ -60,6 +60,7 @@ export class TournamentService {
   #autoTakeTimer: NodeJS.Timeout | null = null;
   #autoTakeSource: LiveSelection | null = null;
   #autoTakeGeneration = 0;
+  #manualTakes = 0;
 
   public constructor(
     private readonly providers: ProviderRegistry,
@@ -270,8 +271,7 @@ export class TournamentService {
         if (event === null || event.id !== command.eventId || findSet(event, command.setId) === null) {
           throw new ProviderError("set_not_found", "The preview set is no longer available. Select it again.");
         }
-        await this.#live.take(event, command.setId);
-        await this.#saveOperator(this.getState().operator);
+        await this.#takeManually(() => this.#live.take(event, command.setId));
         break;
       }
       case "live.restore": {
@@ -279,8 +279,7 @@ export class TournamentService {
         if (selection === null) {
           throw new ProviderError("set_not_found", "There is no previous live set to restore.");
         }
-        await this.#live.takeSelection(selection);
-        await this.#saveOperator(this.getState().operator);
+        await this.#takeManually(() => this.#live.takeSelection(selection));
         break;
       }
       case "live.auto.settings": {
@@ -343,9 +342,19 @@ export class TournamentService {
     return this.#bracket.loadEvent(providerId, input, preserveSelection);
   }
 
+  async #takeManually(take: () => Promise<void>): Promise<void> {
+    this.#manualTakes += 1;
+    try {
+      await take();
+      await this.#saveOperator(this.getState().operator);
+    } finally {
+      this.#manualTakes -= 1;
+    }
+  }
+
   #queueAutoTake(): void {
     const state = this.getState();
-    if (!state.operator.autoTakeEnabled || state.event === null ||
+    if (this.#manualTakes > 0 || !state.operator.autoTakeEnabled || state.event === null ||
         state.operator.selectedSetId === null || state.operator.liveSelection === null) {
       return;
     }
@@ -422,8 +431,10 @@ export class TournamentService {
     if (generation !== this.#autoTakeGeneration) {
       return;
     }
+    let sceneAccepted = false;
     try {
       await this.#live.take(event, autoTake.setId, { unfinishedOnly: true });
+      sceneAccepted = true;
       await this.#saveOperator(this.getState().operator);
       if (generation === this.#autoTakeGeneration) {
         this.#resetAutoTake();
@@ -435,7 +446,8 @@ export class TournamentService {
         return;
       }
       console.warn("Automatic Take live failed:", requestMessage(error));
-      if (generation === this.#autoTakeGeneration) {
+      // Cancelling the transition cannot discard a published scene's save failure.
+      if (!this.#closed && (generation === this.#autoTakeGeneration || sceneAccepted)) {
         this.#resetAutoTake();
         this.#commit({
           autoTake: {

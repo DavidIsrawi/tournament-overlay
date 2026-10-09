@@ -84,6 +84,8 @@ remain visible above the separately scrolling settings.
   event/phase/selected set, disabling the setting, and stale live data cancel the
   automatic transition. Completed or unresolved next sets are never taken
   automatically. Failures are reported in Next set and can be retried manually.
+  Auto-live never interrupts an in-flight manual Take live or Restore. A failed
+  scene save remains visible even if auto-live was cancelled after the switch.
   The setting is saved, but countdowns are not resumed after restart or started
   for a live set that was already completed when restored.
 

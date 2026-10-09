@@ -37,6 +37,53 @@ function create() {
   };
 }
 
+async function prepareManualFixture() {
+  const provider = fixtureProvider();
+  const previous = fixtureSet("group-1-c");
+  const sets = new Map([
+    [previous.id, previous],
+    ["group-1-a", fixtureSet("group-1-a")],
+    ["group-1-b", fixtureSet("group-1-b")],
+  ]);
+  const requests: {
+    readonly resolve: (set: NormalizedSet) => void;
+    readonly reject: (error: unknown) => void;
+    readonly signal: AbortSignal | undefined;
+  }[] = [];
+  let hold = false;
+  const loadSet = vi.fn<TournamentDataProvider["loadSet"]>((id, _event, options) => {
+    const set = sets.get(id);
+    if (set === undefined) {
+      return Promise.reject(new Error(`Unknown fixture set ${id}`));
+    }
+    if (hold && id === previous.id) {
+      const pending = Promise.withResolvers<NormalizedSet>();
+      requests.push({ resolve: pending.resolve, reject: pending.reject, signal: options?.signal });
+      return pending.promise;
+    }
+    return Promise.resolve(set);
+  });
+  const store = new MemoryOperatorStore();
+  const service = new TournamentService(new ProviderRegistry([{
+    ...provider,
+    loadSet,
+    loadPhaseGroupSets: async (...args) => {
+      const loaded = await provider.loadPhaseGroupSets(...args);
+      return args[0] === previous.phaseGroupId ? [...loaded, previous] : loaded;
+    },
+  }]), store, 1_000, 60_000);
+  services.push(service);
+  await service.dispatch({ type: "event.load", providerId: "startgg", input: fixtureEvent().slug });
+  await service.dispatch({ type: "live.take", eventId: "event-1", setId: previous.id });
+  await prepare(service);
+  hold = true;
+  return {
+    service, store, requests, previous, sets,
+    releaseManualReads: () => { hold = false; },
+    completeLive: () => { sets.set("group-1-a", { ...fixtureSet("group-1-a"), state: "completed" }); },
+  };
+}
+
 async function prepare(service: TournamentService, enabled = true): Promise<void> {
   await service.dispatch({ type: "event.load", providerId: "startgg", input: fixtureEvent().slug });
   await service.dispatch({ type: "live.take", eventId: "event-1", setId: "group-1-a" });
@@ -150,6 +197,78 @@ describe("automatic next-set take", () => {
     expect(fixture.service.getState().overlay.setId).toBe("group-1-b");
   });
 
+  it.each(["live.take", "live.restore"] as const)("does not override an in-flight manual %s when live polling observes completion", async (type) => {
+    const fixture = await prepareManualFixture();
+    const command: ClientCommand = type === "live.take"
+      ? { type, eventId: "event-1", setId: fixture.previous.id }
+      : { type };
+    const result = fixture.service.dispatch(command).then(() => null, (error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.requests).toHaveLength(1);
+    fixture.completeLive();
+    await vi.advanceTimersByTimeAsync(1_000 + AUTO_TAKE_DELAY_MS);
+    expect(fixture.requests[0]?.signal?.aborted).toBe(false);
+    expect(fixture.service.getState()).toMatchObject({ autoTake: null, overlay: { setId: "group-1-a" } });
+    fixture.requests[0]?.resolve(fixture.previous);
+    expect(await result).toBeNull();
+    expect(fixture.service.getState().overlay.setId).toBe(fixture.previous.id);
+
+    fixture.releaseManualReads();
+    fixture.sets.set(fixture.previous.id, { ...fixture.previous, state: "completed" });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fixture.service.getState().autoTake?.status).toBe("countdown");
+  });
+
+  it("keeps the latest manual take protected after it supersedes an earlier restore", async () => {
+    const fixture = await prepareManualFixture();
+    const restore = fixture.service.dispatch({ type: "live.restore" }).then(() => null, (error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    const take = fixture.service.dispatch({ type: "live.take", eventId: "event-1", setId: fixture.previous.id })
+      .then(() => null, (error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await restore).toMatchObject({ name: "AbortError" });
+    expect(fixture.requests).toHaveLength(2);
+    fixture.completeLive();
+    await vi.advanceTimersByTimeAsync(1_000 + AUTO_TAKE_DELAY_MS);
+    expect(fixture.requests[1]?.signal?.aborted).toBe(false);
+    expect(fixture.service.getState().autoTake).toBeNull();
+    fixture.requests[0]?.resolve(fixture.previous);
+    fixture.requests[1]?.resolve(fixture.previous);
+    expect(await take).toBeNull();
+    expect(fixture.service.getState().overlay.setId).toBe(fixture.previous.id);
+  });
+
+  it("keeps manual transition ownership until its scene save finishes", async () => {
+    const fixture = await prepareManualFixture();
+    fixture.releaseManualReads();
+    const pending = Promise.withResolvers<void>();
+    const save = fixture.store.save.bind(fixture.store);
+    vi.spyOn(fixture.store, "save").mockImplementationOnce((operator) => pending.promise.then(() => save(operator)));
+    const take = fixture.service.dispatch({ type: "live.take", eventId: "event-1", setId: fixture.previous.id })
+      .then(() => null, (error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.service.getState().overlay.setId).toBe(fixture.previous.id);
+    fixture.sets.set(fixture.previous.id, { ...fixture.previous, state: "completed" });
+    await vi.advanceTimersByTimeAsync(1_000 + AUTO_TAKE_DELAY_MS);
+    expect(fixture.service.getState()).toMatchObject({ autoTake: null, overlay: { setId: fixture.previous.id } });
+    pending.resolve();
+    expect(await take).toBeNull();
+    expect(fixture.store.state?.liveSelection?.setId).toBe(fixture.previous.id);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fixture.service.getState().autoTake).toBeNull();
+  });
+
+  it("releases manual transition ownership after a failed fetch", async () => {
+    const fixture = await prepareManualFixture();
+    const result = fixture.service.dispatch({ type: "live.restore" }).then(() => null, (error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    fixture.requests[0]?.reject(new Error("Restore offline"));
+    expect(await result).toMatchObject({ message: "Restore offline" });
+    fixture.completeLive();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(fixture.service.getState().autoTake?.status).toBe("countdown");
+  });
+
   it("does not queue a hidden output or a preview that is already live", async () => {
     const hidden = create();
     await prepare(hidden.service);
@@ -232,6 +351,55 @@ describe("automatic next-set take", () => {
     deferred.resolve(fixtureSet("group-1-b"));
     await vi.advanceTimersByTimeAsync(0);
     expect(fixture.service.getState()).toMatchObject({ autoTake: null, overlay: { setId: "group-1-a" } });
+  });
+
+  it("reports an unsaved published scene when auto-live is cancelled during persistence", async () => {
+    const fixture = create();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await prepare(fixture.service);
+    await fixture.complete();
+    const save = Promise.withResolvers<void>();
+    vi.spyOn(fixture.store, "save").mockImplementationOnce(() => save.promise);
+    await vi.advanceTimersByTimeAsync(AUTO_TAKE_DELAY_MS);
+    expect(fixture.service.getState()).toMatchObject({ autoTake: { status: "taking" }, overlay: { setId: "group-1-b" } });
+    await fixture.service.dispatch({ type: "live.auto.cancel" });
+    expect(fixture.service.getState().autoTake).toBeNull();
+    save.reject(new Error("Disk full"));
+    await vi.advanceTimersByTimeAsync(0);
+    expectAutoTakeError(fixture.service, "could not be saved locally");
+    expect(fixture.service.getState().overlay.setId).toBe("group-1-b");
+    expect(fixture.store.state?.liveSelection?.setId).toBe("group-1-a");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it("finishes a successful scene save without rearming cancelled auto-live", async () => {
+    const fixture = create();
+    await prepare(fixture.service);
+    await fixture.complete();
+    const pending = Promise.withResolvers<void>();
+    const save = fixture.store.save.bind(fixture.store);
+    vi.spyOn(fixture.store, "save").mockImplementationOnce((operator) => pending.promise.then(() => save(operator)));
+    await vi.advanceTimersByTimeAsync(AUTO_TAKE_DELAY_MS);
+    await fixture.service.dispatch({ type: "live.auto.cancel" });
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.service.getState()).toMatchObject({ autoTake: null, overlay: { setId: "group-1-b" } });
+    expect(fixture.store.state?.liveSelection?.setId).toBe("group-1-b");
+  });
+
+  it("does not publish a deferred save failure after shutdown", async () => {
+    const fixture = create();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    await prepare(fixture.service);
+    await fixture.complete();
+    const save = Promise.withResolvers<void>();
+    vi.spyOn(fixture.store, "save").mockImplementationOnce(() => save.promise);
+    await vi.advanceTimersByTimeAsync(AUTO_TAKE_DELAY_MS);
+    fixture.service.close();
+    const state = fixture.service.getState();
+    save.reject(new Error("Disk full"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fixture.service.getState()).toBe(state);
   });
 
   it("saves the setting but does not resume countdowns or auto-take restored completed sets", async () => {
