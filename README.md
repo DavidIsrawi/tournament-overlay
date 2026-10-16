@@ -56,6 +56,9 @@ Browsing sets, phases, or another event never replaces the live scoreboard.
 leaves the previous scene on air. Side swaps and overlay-design changes apply
 to the live output immediately.
 
+Loaded players without a reported score display `0` in the bracket, preview,
+and live overlay. Unresolved players keep a placeholder until they are known.
+
 The **Live output / Next set** desk stays above the bracket while you scroll,
 including on narrow screens. Event loading collapses after setup; open
 **Change event** to browse another event without replacing the live set.

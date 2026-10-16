@@ -23,11 +23,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function scene(): ServerState {
+function scene(score: number | null = 0): ServerState {
   const service = new TournamentService(new ProviderRegistry([fixtureProvider()]), new MemoryOperatorStore(), 60_000);
   const initial = service.getState();
   service.close();
-  const set = fixtureSet("match-one");
+  const set = fixtureSet("match-one", "group-1", score);
   const event = {
     ...fixtureEvent(),
     phaseGroups: [{ id: "group-1", name: "Top 8", phaseName: "Top 8", setsLoaded: true, setsFetchedAt: null, sets: [set] }],
@@ -37,6 +37,7 @@ function scene(): ServerState {
     event,
     operator: {
       ...initial.operator,
+      selectedPhaseGroupId: set.phaseGroupId,
       selectedSetId: set.id,
       liveSelection: { providerId: event.providerId, eventInput: event.slug, phaseGroupId: set.phaseGroupId, setId: set.id },
     },
@@ -56,6 +57,22 @@ function render(state: ServerState, pendingCommands: readonly PendingCommand[] =
 }
 
 describe("broadcast controls", () => {
+  it.each([null, 0, 2])("renders scores consistently in live output, preview, and bracket: %s", (score) => {
+    vi.mocked(useTournamentSocket).mockReturnValue({
+      state: scene(score),
+      socketStatus: "connected",
+      error: null,
+      animationEvents: [],
+      pendingCommands: [],
+      upgradeRequired: false,
+      sendCommand: () => true,
+      dismissError: () => {},
+    });
+    const html = renderToStaticMarkup(createElement(App));
+    expect(html.match(new RegExp(`<b>${String(score ?? 0)}</b>`, "g"))).toHaveLength(4);
+    expect(html.match(new RegExp(`<strong>${String(score ?? 0)}</strong>`, "g"))).toHaveLength(2);
+  });
+
   it("distinguishes live output from preview and labels immediate controls", () => {
     const html = render(scene());
     expect(html).toContain('aria-label="Broadcast controls"');

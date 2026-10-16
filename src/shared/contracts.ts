@@ -499,7 +499,7 @@ export function deriveOverlayView(
       sourceEntrantId: slot.entrant.id,
       displayName: slot.entrant.name,
       prefix: slot.entrant.prefix,
-      score: slot.score,
+      score: slot.score ?? 0,
       seed: slot.entrant.seed,
       pronouns: slot.entrant.pronouns,
       social: slot.entrant.social,

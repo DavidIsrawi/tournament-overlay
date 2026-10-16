@@ -98,6 +98,21 @@ describe("operator-only upgrade instructions", () => {
 });
 
 describe("hidden broadcast output", () => {
+  it.each(OVERLAY_TEMPLATE_IDS)("defaults both loaded players to zero in the %s overlay", async (templateId) => {
+    const state = retainedScene(templateId);
+    const set = fixtureSet("match-one", "group-1", null);
+    socketState({
+      ...state,
+      overlay: deriveOverlayView(1, fixtureEvent(), set, state.operator.presentation, "fresh"),
+    }, false);
+
+    const html = await render(OverlayRuntime);
+    const scores = templateId === "octagon"
+      ? html.match(/<strong>0<\/strong>/g)
+      : html.match(/aria-label="Score">0<\/div>/g);
+    expect(scores).toHaveLength(2);
+  });
+
   it.each(OVERLAY_TEMPLATE_IDS)("renders no markup for a hidden %s scene, including when disconnected", async (templateId) => {
     const state = retainedScene(templateId);
     socketState({
