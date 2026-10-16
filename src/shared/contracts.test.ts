@@ -65,6 +65,26 @@ const event: NormalizedEvent = {
 };
 
 describe("deriveOverlayView", () => {
+  it.each([null, 0, 2, -1])("defaults missing scores to zero without changing reported scores: %s", (score) => {
+    const withScore = (slot: NormalizedSet["entrants"][number]) => slot === null ? null : { ...slot, score };
+    const source: NormalizedSet = {
+      ...set,
+      entrants: [withScore(set.entrants[0]), withScore(set.entrants[1])],
+    };
+    const view = deriveOverlayView(1, event, source, presentationStateSchema.parse({ sideOrder: "normal" }), "fresh");
+
+    expect(view.players.map((player) => player?.score)).toEqual([score ?? 0, score ?? 0]);
+    expect(source.entrants.map((slot) => slot?.score)).toEqual([score, score]);
+  });
+
+  it("keeps unresolved players and an unloaded set empty", () => {
+    const presentation = presentationStateSchema.parse({ sideOrder: "normal" });
+    const unresolved = { ...set, entrants: [null, null] as const };
+
+    expect(deriveOverlayView(1, event, unresolved, presentation, "fresh").players).toEqual([null, null]);
+    expect(deriveOverlayView(2, event, null, presentation, "fresh").players).toEqual([null, null]);
+  });
+
   it("swaps presentation sides without mutating normalized source data", () => {
     const originalFirst = set.entrants[0];
     const view = deriveOverlayView(

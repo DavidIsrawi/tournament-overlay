@@ -48,7 +48,7 @@ function SetCard({
               : `${String(slot.entrant.seed)} · `}
             {slot?.entrant.name ?? "TBD"}
           </span>
-          <strong>{slot?.score ?? "—"}</strong>
+          <strong>{slot === null ? "—" : slot.score ?? 0}</strong>
         </span>
       ))}
     </button>

@@ -24,7 +24,7 @@ export class MemoryOperatorStore extends AtomicOperatorStateStore {
   }
 }
 
-export function fixtureSet(id: string, groupId = "group-1", score = 0): NormalizedSet {
+export function fixtureSet(id: string, groupId = "group-1", score: number | null = 0): NormalizedSet {
   const slot = (index: number) => ({
     entrant: {
       id: `${id}-player-${String(index)}`,
