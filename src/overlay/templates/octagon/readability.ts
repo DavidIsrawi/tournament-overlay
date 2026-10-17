@@ -107,16 +107,16 @@ export function abbreviateRoundName(name: string): string {
   const text = name.trim();
   const bracket = /^(winners?|losers?)\s+(?:round(?:\s+(\d+))?|(quarter[\s-]?finals?|semi[\s-]?finals?|finals?|qf|sf|f))(?=$|\s+[·|:])/i.exec(text);
   if (bracket !== null) {
-    const side = bracket[1]?.toLowerCase().startsWith("winner") ? "W" : "L";
+    const side = bracket[1]?.toLowerCase().startsWith("winner") ? "Winners" : "Losers";
     const stage = bracket[3]?.toLowerCase();
     const label = stage === undefined
-      ? `R${bracket[2] === undefined ? "" : ` ${bracket[2]}`}`
-      : stage.startsWith("q") ? "QF" : stage.startsWith("s") ? "SF" : "F";
-    return `${side}${label}${text.slice(bracket[0].length)}`;
+      ? `${side[0]}R${bracket[2] === undefined ? "" : ` ${bracket[2]}`}`
+      : `${side} ${stage.startsWith("q") ? "Quarters" : stage.startsWith("s") ? "Semis" : "Finals"}`;
+    return `${label}${text.slice(bracket[0].length)}`;
   }
   const grand = /^grand\s+finals?(?:\s+(reset|\(reset\)))?(?=$|\s+[·|:])/i.exec(text);
   if (grand !== null) {
-    return `GF${grand[1] === undefined ? "" : " Reset"}${text.slice(grand[0].length)}`;
+    return `${grand[1] === undefined ? "Grand Finals" : "GF Reset"}${text.slice(grand[0].length)}`;
   }
   const round = /^round\s+(\d+)(?=$|\s+[·|:])/i.exec(text);
   if (round !== null) {
