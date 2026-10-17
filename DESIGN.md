@@ -182,9 +182,9 @@ on separate lines in a 256px-wide, 64px-high plate. Its 18px tournament text and
 17px bracket text match the top-left round plate. The footprint stays left of
 the character HUD and away from centered player cameras in the reference
 stream layout. Each line truncates independently with an ellipsis. Standard
-round titles use WR/LR, WQF/LQF, WSF/LSF, WF/LF, GF, and GF Reset. It scales the
-complete stage proportionally to the browser source rather than reflowing
-individual plates.
+round titles use WR/LR, Winners/Losers Quarters, Winners/Losers Semis, full
+Winners/Losers Finals and Grand Finals labels, and GF Reset. It scales the complete
+stage proportionally to the browser source rather than reflowing individual plates.
 
 ## Elevation & Depth
 

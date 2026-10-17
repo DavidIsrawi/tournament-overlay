@@ -54,7 +54,7 @@ describe("readable player markup", () => {
       metadataFields: ["country", "seed"],
     };
     const html = renderToStaticMarkup(createElement(OctagonOverlay, { view, connected: true, animationEvents: [] }));
-    expect(html).toContain('<strong title="Winners Quarter-Final">WQF</strong>');
+    expect(html).toContain('<strong title="Winners Quarter-Final">Winners Quarters</strong>');
     expect(html).toContain('<span title="Tournament">Tournament</span>');
     expect(html).toContain('<strong title="Singles">Singles</strong>');
     expect(html).toContain('<div class="event-plate"><span title="Tournament">Tournament</span><strong title="Singles">Singles</strong></div>');

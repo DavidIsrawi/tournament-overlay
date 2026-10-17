@@ -265,8 +265,9 @@ occupy separate lines in a 256px-wide, 64px-high plate on the 1920x1080 canvas.
 The width and 18px/17px text sizes match the top-left round plate. It stays left
 of the character HUD and away from centered player cameras in the reference
 stream layout. Each title is ellipsized independently when needed. Standard
-round names use `WR 2`,
-`LR 3`, `WQF`/`LQF`, `WSF`/`LSF`, `WF`/`LF`, `GF`, and `GF Reset`.
+round names use `WR 2`, `LR 3`, `Winners Quarters`/`Losers Quarters`,
+`Winners Semis`/`Losers Semis`, and `GF Reset`. Finals use the full labels
+`Winners Finals`, `Losers Finals`, and `Grand Finals`.
 Numbered rounds without a bracket side use `R 4`. Custom round names and pool
 qualifiers are preserved, and the full round name remains in the title attribute.
 
